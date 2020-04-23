@@ -7,11 +7,11 @@ This package contains a collection of Python code for performing various neural 
 This package is (currently) organized in the following manner:
 - `array.py` : module for interacting with array data
 - `analysis` : general analysis sub-package
--- `gpfa.py` : module for interacting with GPFA (Gaussian Process Factor Analysis) data
+    - `gpfa.py` : module for interacting with GPFA (Gaussian Process Factor Analysis) data
 - `util` : utilities sub-package
--- `convertmat.py` : module for loading MATLAB HDF5 data into Python using Pandas
+    - `convertmat.py` : module for loading MATLAB HDF5 data into Python using Pandas
 - `el` : collection of analysis code for the EL project
--- `plot.py` : EL-specific plotting functionality
--- `proc.py` : data processing and cleaning
--- `util.py` : assorted EL-specific utilities functions
--- `validation.py` : module used to validate results, mainly relating to the migration from MATLAB to Python
+    - `plot.py` : EL-specific plotting functionality
+    - `proc.py` : data processing and cleaning
+    - `util.py` : assorted EL-specific utilities functions
+    - `validation.py` : module used to validate results, mainly relating to the migration from MATLAB to Python
