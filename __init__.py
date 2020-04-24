@@ -11,3 +11,5 @@ import neuropy.el
 
 # Import top-level modules
 import neuropy.array
+import neuropy.temp
+
