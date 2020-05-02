@@ -192,6 +192,7 @@ def spatial_average(
     # and use them to compute the variance. Note that this is making an
     # assumption of equal variance for the two dimensions.
     traj_diff_centered = traj_diff - traj_diff.mean(axis=1, keepdims=True)
+    # TODO: figure out if this is needed
     dist = np.linalg.norm(traj_diff_centered, axis=0, keepdims=True)  # 1 x samp
     var_diff = np.mean(dist**2)  # Average sum of squared distances
     p_coeff = 1 / (np.sqrt(var_diff * 2 * np.pi))  # Coefficient
@@ -297,19 +298,18 @@ def find_traj_onset(trial):
 class FlowField:
     """Base flow field class."""
 
-    # Methods:
-    # - Init
-    # - Fit
-    # - Plot
     def __int__(self):
         self.X_fit = None
         self.dX_fit = None
+        self.nX_fit = None
         self.delta = None
         self.max_dist = None
+        self.grid = None
+        self.n_grid = None
 
         return None
 
-    def fit(self, traj, delta, max_dist):
+    def fit(self, traj, delta, center, max_dist):
         """Fit flow field to data.
 
         Arguments:
@@ -317,38 +317,201 @@ class FlowField:
             delta -- Size of each voxel
             max_dist -- Furthest grid distance
         """
-        # Define grid
-        grid = np.arange(0, max_dist, delta)
-        grid = np.concatenate([-np.flip(grid[1:]), x])
-        n_grid = grid.shape[0]
-
-        # Get velocity and truncated state
-        X, dX = get_traj_velocity(traj)
+        # Get data
+        X, dX, grid, n_grid = get_flow_data(traj, delta, center, max_dist)
 
         # Iterate over voxels in grid
         X_fit = np.full((n_grid, n_grid, 2), np.nan)  # Voxel center
         dX_fit = np.full((n_grid, n_grid, 2), np.nan)  # Computed flow
         nX = np.zeros((n_grid, n_grid))  # Number of points per voxel
-        for i in range(n_grid):
-            for j in range(n_grid):
-                # Find all points that lie in the current voxel
+        for i in range(n_grid):  # Iterate over x-dimension
+            for j in range(n_grid):  # Iterate over y-dimension
+                # Find all points that lie in the current voxel. Currently do
+                # this explicitly for the two dimensions, but this could be
+                # extended to other dimensions eventually.
+                x_1_lim = grid['x'][[i, i+1]]
+                x_2_lim = grid['y'][[j, j+1]]
+                x_1_mask = np.logical_and(
+                    X[0, :] >= x_1_lim[0],
+                    X[0, :] < x_1_lim[1])
+                x_2_mask = np.logical_and(
+                    X[1, :] >= x_2_lim[0],
+                    X[1, :] < x_2_lim[1])
+                x_mask = np.logical_and(x_1_mask, x_2_mask)  # Could use np.all
+                dX_voxel = dX[:, x_mask]
 
-                # Average over points
-                dX_fit[i, j, :] = []
-                nX[i, j] = []
+                # Average over points. Only do this if there is at least one
+                # point in the voxel
+                nX[i, j] = x_mask.sum()
+                if nX[i, j] > 0:
+                    dX_fit[i, j, :] = dX_voxel.mean(axis=1)
 
-                # Calculate the center of the voxel
-                X_fit[i, j, :] = []
+                # Calculate the center of the voxel. The calculated flow vector
+                # is associated with this point.
+                X_fit[i, j, :] = np.array([grid['x'][i],
+                                           grid['y'][j]]) + delta/2
 
         # Update object with parameters and fit results
         self.X_fit = X_fit
         self.dX_fit = dX_fit
+        self.nX_fit = nX
         self.delta = delta
         self.max_dist = max_dist
+        self.grid = grid
+        self.n_grid = n_grid
 
         return None
 
-    def plot(self):
+    def plot(self, min_n=1, color='k'):
         """Plot flow field."""
+
+        import matplotlib.pyplot as plt
+
+        # Unpack data for plotting
+        n = self.nX_fit.reshape((1, -1))
+        mask = n >= min_n
+        X = self.X_fit[:, :, 0].reshape((1, -1))
+        Y = self.X_fit[:, :, 1].reshape((1, -1))
+        U = self.dX_fit[:, :, 0].reshape((1, -1))
+        V = self.dX_fit[:, :, 1].reshape((1, -1))
+
+        # Plot
+        plt.quiver(X[mask], Y[mask], U[mask], V[mask], color=color)
+
         return None
 
+
+class GaussianFlowField(FlowField):
+    """Flow field fit with Gaussian smoothing.
+
+    This class implements fitting flow fields to data using a smoothing-based
+    approach. In short, the flow field is 'fit' by taking a weighted average of
+    all points for each location where the flow is to be evaluated. Weighting
+    is based on the probability that a given point is from a Gaussian
+    distribution with a mean at the evaluation points and a variance that is
+    fit to the data.
+
+    To find the variance of the distribution, we calculate the variance of the
+    magnitude of velocity across data points. This provides a distribution of
+    how close neighboring points are in time. [Note 2020.04.29] -- this is
+    probably not the best distribution to use. Essentially, what we want to
+    know is the probability of a point being in the vicinity of another point.
+
+    The variance term used in the probability distribution can either be fit,
+    or it can be specified. The former is best when doing a one-off estimate
+    of the flow field. The latter is preferred when comparing different flow
+    fields.
+    """
+
+    def __init__(self):
+        """Init method for GaussianFlowField class."""
+        # Call parent init method
+        FlowField.__int__(self)
+
+        # Add length constant attribute (not in parent class)
+        self.l_const = None
+
+    def fit(self, traj, delta, max_dist, l_const=None):
+        """Fit method for Gaussian Flow Field class."""
+
+        # Get data
+        X, dX, grid, n_grid = get_flow_data(traj, delta, max_dist)
+
+        # Fit length constant if not specified
+        if l_const is None:
+            # Calculate length constant here
+            D = np.linalg.norm(dX, axis=0, keepdims=True)  # 1 x samp
+            l_const = np.mean(D ** 2)  # Average sum of squared distances
+
+        # Pre-compute length constant
+        p_coeff = 1 / (np.sqrt(l_const * 2 * np.pi))  # Coefficient
+
+        # Iterate over evaluation points
+        X_fit = np.full((n_grid, n_grid, 2), np.nan)
+        dX_fit = np.full((n_grid, n_grid, 2), np.nan)
+        for i in range(n_grid):
+            for j in range(n_grid):
+                # Define the current position. Note that the grid entries
+                # reflect the edges of the grid, so add half the delta to
+                # center them
+                x_ij = np.array([[grid[i]], [grid[j]]]) + delta/2
+
+                # Get distance of all points from the current location
+                D = np.linalg.norm(X - x_ij, axis=0, keepdims=True)
+
+                # Calculate probability of all points
+                pD = p_coeff * np.exp((-1 / 2) * (D ** 2) / l_const)
+
+                # To average, weight each point by its probability, take the
+                # sum, and divide by the weighting factors.
+                dX_ij = pD * dX
+                dx_ij = ((1 / np.sum(pD))
+                         * np.sum(dX_ij, axis=1, keepdims=True))
+
+                # Update results matrices
+                X_fit[i, j, :] = x_ij[:, 0]  # x_ij is 2D
+                dX_fit[i, j, :] = dx_ij[:, 0]  # dx_ij is 2D
+
+        # Add results to object
+        self.X_fit = X_fit
+        self.dX_fit = dX_fit
+        self.l_const = l_const
+
+        # Note - nX is not needed for this class, but set it so that the parent
+        # plot method can be used.
+        self.nX_fit = np.full((n_grid, n_grid), X.shape[1])
+
+        return None
+
+
+def get_flow_data(traj, delta, center, max_dist):
+    """Get data used for fitting flow fields."""
+
+    # Define grid
+    grid = np.arange(0, max_dist, delta)
+    grid = np.concatenate([-np.flip(grid[1:]), grid])
+    n_grid = grid.shape[0] - 1  # The grid defines the edges
+    grid = {'x': grid + center[0, 0], 'y': grid + center[1, 0]}
+
+    # Get velocity and truncated state
+    X, dX = get_traj_velocity(traj)  # Output are series
+    X = np.concatenate(X.to_numpy(), axis=1)  # Now dim x samp
+    dX = np.concatenate(dX.to_numpy(), axis=1)  # Now dim x samp
+
+    return X, dX, grid, n_grid
+
+
+def remove_non_paired_trials(df):
+    """Remove non-paired trials from a dataset.
+
+    This function will remove any trials from the input dataset df that do not
+    have a matching pair. A matching pair are trial conditions A->B and B->A.
+
+    """
+    # Define target combinations
+    start_pos = np.concatenate(df['startPos'])
+    end_pos = np.concatenate(df['targPos'])
+    targ_comb = np.concatenate([start_pos, end_pos], axis=1)
+    uni_targ_comb = np.unique(targ_comb, axis=0)
+
+    # Convert target combinations to trial conditions
+    start_cond = get_targ_cond(df['startPos'])
+    end_cond = get_targ_cond(df['targPos'])
+    targ_cond = [''.join([s, e]) for s, e in zip(start_cond, end_cond)]
+    mask = get_targ_pairs(start_cond, end_cond)
+
+    # Remove non-paired targets
+    df = df[np.array(mask)]
+    targ_cond = [tc for tc, m in zip(targ_cond, mask) if m]
+
+    # Put other target information into a dict for easy access. This is
+    # redundant and probably unnecessary, but is being done just in case this
+    # information may be useful later on.
+    targ_info = {
+        'start_pos': start_pos,
+        'end_pos': end_pos,
+        'targ_comb': targ_comb,
+        'uni_targ_comb': uni_targ_comb
+    }
+
+    return df, targ_cond, targ_info
