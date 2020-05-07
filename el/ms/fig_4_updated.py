@@ -1,4 +1,4 @@
-#%% Import
+# Setup -- Import modules
 
 # Standard modules
 import os
@@ -17,7 +17,7 @@ import neuropy.temp as tmp
 %reload_ext autoreload
 %autoreload 2
 
-#%% Load data, decoding, and GPFA parameters
+# Load data, decoding, and GPFA parameters
 
 # Define data paths
 base_dir = os.path.join(os.sep, 'Volumes', 'Samsung_T5', 'Batista', 'Animals')
@@ -132,36 +132,6 @@ for uc in uni_targ_cond_int:
 # Display plot
 plt.show()
 
-#%% Test FlowField class
-
-# Get subset of data
-cond = 'T1T5'
-cond_mask = [True if tc == cond else False for tc in targ_cond_int]
-traj_cond = traj_valid[cond_mask]
-
-# Define fitting parameters
-delta = 10
-max_dist = 200
-
-# Fit flow field -- voxel method
-F = tmp.FlowField()
-F.fit(traj_cond, delta, max_dist)
-F.plot(min_n=3, color=col_map[cond]['dark'])
-ax_lim = np.array([-1, 1]) * 125
-plt.xlim(ax_lim)
-plt.ylim(ax_lim)
-plt.show()
-
-# Fit flow field -- Gaussian averaging method
-F2 = tmp.GaussianFlowField()
-F2.fit(traj_cond, delta, max_dist, l_const=10)
-F2.plot()
-plt.xlim(ax_lim)
-plt.ylim(ax_lim)
-plt.show()
-
-F2.l_const
-
 #%% Transform neural trajectories
 
 # The idea here is to compare projections of neural activity between the
@@ -221,19 +191,31 @@ P = np.array([p_1, p_2])
 # trials b/c both the intuitive and rotated use the same target config.
 targ_cond_unique = set(targ_cond_int)
 
+# Define colormap (used for plotting)
+col_map = tmp.define_color_map()
+line_col = {
+    'int': 'xkcd:medium blue',
+    'rot': 'xkcd:blood red',
+    'introt': 'xkcd:emerald green'
+}
+
+
 # Setup figure size
+# TODO: figure out how to set up relative paths
 save_dir = '/Users/alandegenhart/results/el_ms/fig_4/proj/'
 fig_size = (20, 10)
 n_row = 2
 n_col = 4
 
+# Analysis parameters
+n_permute = 100  # Number of random permutations
+
 # Grid parameters
-delta_grid = 1
+delta_grid = 2
 n_grid_min = 2
 
 # Iterate over projections
 n_proj = P.shape[0]
-fh = []
 for proj in range(n_proj):
     # Setup figure. For now, each projection is a separate figure
     fig = plt.figure(figsize=fig_size)
@@ -249,8 +231,8 @@ for proj in range(n_proj):
         tc_mask_int = [True if tc == tcu else False for tc in targ_cond_int]
         tc_mask_rot = [True if tc == tcu else False for tc in targ_cond_rot]
 
-        # Get the range of the data. We only want to fit flow fields to the region
-        # where we have data points
+        # Get the range of the data. We only want to fit flow fields to the
+        # region where we have data points
         U_concat_int = np.concatenate(
             U_proj_int[tc_mask_int].to_numpy(), axis=1)
         U_concat_rot = np.concatenate(
@@ -262,77 +244,182 @@ for proj in range(n_proj):
         center = lim_U.mean(axis=1, keepdims=True)
         max_dist = (lim_U - center)[:, 1].max() + delta_grid
 
-        # Setup axis - intuitive
+        # Get the set of valid indices for the intuitive and rotated datasets
+        # We will use these when subsampling.
+        n_int = np.floor(sum(tc_mask_int)/2).astype(int)
+        n_rot = np.floor(sum(tc_mask_rot)/2).astype(int)
+        idx_int = np.argwhere(tc_mask_int)[:, 0]  # shape: (n_trials, )
+        idx_rot = np.argwhere(tc_mask_rot)[:, 0]  # shape: (n_trials, )
+        n_trials = np.min([n_int, n_rot])
+
+        # Initialize arrays
+        diff_int_all = []
+        diff_rot_all = []
+        diff_introt_all = []
+        n_overlap_int = []
+        n_overlap_rot = []
+        n_overlap_introt = []
+
+        # Iterate over permutations
+        # TODO: it's likely that this can be streamlined/cleaned up
+        #   substantially to avoid redundancy. Might not be worth the trouble
+        #   in this case, though.
+        rng = np.random.default_rng()
+        for p in range(n_permute):
+            # Randomly permute indices.
+            rnd_idx_int = rng.permutation(idx_int.shape[0])
+            rnd_idx_rot = rng.permutation(idx_rot.shape[0])
+            idx_perm_int = idx_int[rnd_idx_int]
+            idx_perm_rot = idx_rot[rnd_idx_rot]
+
+            # Split data. This is a bit inefficient, but we're doing it here
+            # to make things clearer
+            U_perm_int_1 = U_proj_int.iloc[idx_perm_int[0:n_trials]]
+            U_perm_int_2 = U_proj_int.iloc[idx_perm_int[n_trials:n_trials*2]]
+            U_perm_rot_1 = U_proj_rot.iloc[idx_perm_rot[0:n_trials]]
+            U_perm_rot_2 = U_proj_rot.iloc[idx_perm_rot[n_trials:n_trials*2]]
+
+            # Fit flow field to each dataset
+            F_int_1 = tmp.FlowField()
+            F_int_1.fit(U_perm_int_1, delta_grid, center, max_dist)
+            F_int_2 = tmp.FlowField()
+            F_int_2.fit(U_perm_int_2, delta_grid, center, max_dist)
+            F_rot_1 = tmp.FlowField()
+            F_rot_1.fit(U_perm_rot_1, delta_grid, center, max_dist)
+            F_rot_2 = tmp.FlowField()
+            F_rot_2.fit(U_perm_rot_2, delta_grid, center, max_dist)
+
+            # Compare intuitive and rotated datasets to themselves. Also
+            # compare intuitive and rotated to one another.
+            diff_int = tmp.compare_flow_fields(
+                F_int_1, F_int_2, n_min=n_grid_min)
+            diff_rot = tmp.compare_flow_fields(
+                F_rot_1, F_rot_2, n_min=n_grid_min)
+            diff_introt_1 = tmp.compare_flow_fields(
+                F_int_1, F_rot_1, n_min=n_grid_min)
+            diff_introt_2 = tmp.compare_flow_fields(
+                F_int_2, F_rot_2, n_min=n_grid_min)
+
+            # Add results to list
+            diff_int_all.append(diff_int['diff'])
+            diff_rot_all.append(diff_rot['diff'])
+            diff_introt_all.append(diff_introt_1['diff'])
+            n_overlap_int.append(diff_int['n_overlap'])
+            n_overlap_rot.append(diff_rot['n_overlap'])
+            n_overlap_introt.append(diff_introt_1['n_overlap'])
+
+        # --- Subplot 1: Intuitive flow field ---
+        # Setup axis -- intuitive
         plot_idx = row * 4 + 1  # Apparently subplot indices are 1-indexed
         plt.subplot(n_row, n_col, plot_idx)
 
-        # Fit flow field to intuitive trajectories
-        F_int = tmp.FlowField()
-        F_int.fit(U_proj_int[tc_mask_int], delta_grid, center, max_dist)
-        F_int.plot(min_n=n_grid_min, color=col_map[tcu]['dark'])
+        # Plot intuitive flow field
+        F_int_1.plot(min_n=n_grid_min, color=col_map[tcu]['dark'])
 
-        # Plot intuitive trajectories
+        # Plot intuitive trajectories -- currently using the last random
+        # permutation
         tmp.plot_traj(
-            U_proj_int[tc_mask_int],
-            pd.Series(targ_cond_int)[tc_mask_int],
+            U_proj_int.iloc[idx_perm_int[0:n_trials]],
+            pd.Series(targ_cond_int).iloc[idx_perm_int[0:n_trials]],
             col_map,
             col_mode='light',
             line_width=0.5,
             marker_size=7)
         plt.title('Proj: {}, Targ: {}, Dec: {}'.format(proj, tcu, 'intuitive'))
 
-        # Setup axis - rotated
+        # --- Subplot 2: Rotated flow field ---
+        # Setup axis -- rotated
         plot_idx = row * 4 + 2
         plt.subplot(n_row, n_col, plot_idx)
 
-        # Fit flow field to rotated trajectories
-        F_rot = tmp.FlowField()
-        F_rot.fit(U_proj_rot[tc_mask_rot], delta_grid, center, max_dist)
-        F_rot.plot(min_n=n_grid_min, color=col_map[tcu]['dark'])
+        # Plot rotated flow field
+        F_rot_1.plot(min_n=n_grid_min, color=col_map[tcu]['dark'])
 
-        # Plot rotated trajectories
+        # Plot rotated trajectories -- currently using the last random
+        # permutation
         tmp.plot_traj(
-            U_proj_rot[tc_mask_rot],
-            pd.Series(targ_cond_rot)[tc_mask_rot],
+            U_proj_rot.iloc[idx_perm_rot[0:n_trials]],
+            pd.Series(targ_cond_rot).iloc[idx_perm_rot[0:n_trials]],
             col_map,
             col_mode='light',
             line_width=0.5,
             marker_size=7)
         plt.title('Proj: {}, Targ: {}, Dec: {}'.format(proj, tcu, 'rotated'))
 
-        # Compare flow fields
-        dX_diff = F_int.dX_fit - F_rot.dX_fit
-        dX_diff_mag = np.linalg.norm(dX_diff, axis=2)  # n_grid x n_grid
-
-        # Plot colormap
-        # Setup axis - colormap
+        # --- Subplot 3: Difference heat map ---
+        # Setup axis -- heatmap
         plot_idx = row * 4 + 3  # Apparently subplot indices are 1-indexed
         axh = plt.subplot(n_row, n_col, plot_idx)
 
-        axh.matshow(dX_diff_mag.T)
-        axh.set_ylim(0, F_int.n_grid + 1)
+        axh.matshow(diff_introt_1['diff_grid'].T)
+        axh.set_ylim(0, F_int_1.n_grid + 1)
         axh.xaxis.tick_bottom()
-        axh.set_title('Difference in flow')
 
-        # Plot histogram of pairwise-differences
+        # --- Subplot 4: Histogram of flow field differences ---
         # Setup axis - histogram
         plot_idx = row * 4 + 4  # Apparently subplot indices are 1-indexed
         axh = plt.subplot(n_row, n_col, plot_idx)
 
-        # Get histogram data and remove any NaNs
-        # TODO: also filter this by overlap
-        hist_data = dX_diff_mag.flatten()
+        # Plot histogram -- intuitive vs intuitive
+        hist_data = np.concatenate(diff_int_all)
         hist_data = hist_data[np.logical_not(np.isnan(hist_data))]
-        axh.hist(hist_data)
+        axh.hist(hist_data,
+                 bins=20,
+                 histtype='step',
+                 density=True,
+                 label='int vs int',
+                 color=line_col['int'])
 
+        # Plot histogram -- rotated vs rotated
+        hist_data = np.concatenate(diff_rot_all)
+        hist_data = hist_data[np.logical_not(np.isnan(hist_data))]
+        axh.hist(hist_data,
+                 bins=20,
+                 histtype='step',
+                 density=True,
+                 label='rot vs rot',
+                 color=line_col['rot'])
+
+        # Plot histogram -- intuitive vs rotated
+        hist_data = np.concatenate(diff_introt_all)
+        hist_data = hist_data[np.logical_not(np.isnan(hist_data))]
+        axh.hist(hist_data,
+                 bins=20,
+                 histtype='step',
+                 density=True,
+                 linewidth=2,
+                 label='int vs rot',
+                 color=line_col['introt'])
+
+        # Plot median values
+        y_lim = axh.get_ylim()
+        axh.plot(
+            np.median(np.concatenate(diff_int_all)) * np.ones((2, )), y_lim,
+            linestyle='--',
+            color=line_col['int']
+        )
+        axh.plot(
+            np.median(np.concatenate(diff_rot_all)) * np.ones((2, )), y_lim,
+            linestyle='--',
+            color=line_col['rot']
+        )
+        axh.plot(
+            np.median(np.concatenate(diff_introt_all)) * np.ones((2, )), y_lim,
+            linestyle='--',
+            color=line_col['introt']
+        )
+
+        # Format plot
+        axh.legend()
         axh.set_xlabel('Flow difference magnitude')
-        axh.set_ylabel('Counts')
+        axh.set_ylabel('Density')
 
         row += 1  # Increment row counter (TODO: find a way to remove this)
 
     # Save figure
     fig_name = '{}proj_{}.pdf'.format(save_dir, proj)
     plt.savefig(fig_name)
+    plt.close()
 
 #%% Notes
 
