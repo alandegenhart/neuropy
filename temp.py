@@ -515,3 +515,36 @@ def remove_non_paired_trials(df):
     }
 
     return df, targ_cond, targ_info
+
+
+def compare_flow_fields(F1, F2, n_min=1):
+    """Compare two flow fields.
+
+    """
+
+    # Compute the element-by-element difference
+    dX_diff = F1.dX_fit - F2.dX_fit
+    dX_diff_mag = np.linalg.norm(dX_diff, axis=2)  # n_grid x n_grid
+
+    # Filter by the number of observations. Find the number of observations for
+    # each voxel. Only keep track of magnitude differences that meet this
+    # threshold.
+    nX_mask_1 = F1.nX_fit < n_min
+    nX_mask_2 = F2.nX_fit < n_min
+    nX_mask = nX_mask_1 | nX_mask_2
+    dX_diff_mag[nX_mask] = np.nan  # Set invalid voxels to NaN
+
+    # In addition to the magnitude matrix, also return just the valid
+    # magnitudes, and the number of overlap points
+    mag_diff = dX_diff_mag.reshape((-1,))
+    mag_diff = mag_diff[np.logical_not(np.isnan(mag_diff))]  # Remove NaN
+    n_overlap = np.logical_not(nX_mask).sum()
+
+    # Add results to a dict
+    result = {}
+    result['diff_grid'] = dX_diff_mag
+    result['diff'] = mag_diff
+    result['n_overlap'] = n_overlap
+
+    return result
+
