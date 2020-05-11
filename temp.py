@@ -10,6 +10,7 @@ allows for more rapid iteration/integration of prototpyed functions.
 # Import
 import numpy as np
 import pandas as pd
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 
@@ -86,6 +87,7 @@ def define_color_map():
 def plot_traj(traj, cond, col_map,
               onset=[],
               offset=[],
+              axh=[],
               col_mode='dark',
               line_width=1,
               marker_size=7):
@@ -131,6 +133,7 @@ def plot_traj(traj, cond, col_map,
         # Plot
         plot_single_traj(temp_traj,
                          cond.iloc[i], col_map,
+                         axh=axh,
                          col_mode=col_mode,
                          line_width=line_width,
                          marker_size=marker_size)
@@ -139,19 +142,24 @@ def plot_traj(traj, cond, col_map,
     
 
 def plot_single_traj(traj, cond, color_map,
+                     axh=[],
                      col_mode='dark',
                      line_width=1,
                      marker_size=10):
     """Plot a single trajectory"""
-    
+
+    # If an axis handle is not provided, then use the current axis
+    if not axh:
+        axh = plt.gca()
+
     # Plot trajectory
-    plt.plot(
+    axh.plot(
         traj[0, :], traj[1, :], 
         color=color_map[cond][col_mode],
         linewidth=line_width             
     )
     # Plot start point
-    plt.plot(
+    axh.plot(
         traj[0, 0], traj[1, 0],
         color=color_map[cond][col_mode],
         marker='.',
@@ -160,7 +168,7 @@ def plot_single_traj(traj, cond, color_map,
         markerfacecolor=color_map[cond][col_mode]
     )
     # Plot end point
-    plt.plot(
+    axh.plot(
         traj[0, -1], traj[1, -1],
         color=color_map[cond][col_mode],
         marker='o',
@@ -362,10 +370,15 @@ class FlowField:
 
         return None
 
-    def plot(self, min_n=1, color='k'):
+    def plot(self, min_n=1, color='k', axh=[]):
         """Plot flow field."""
 
         import matplotlib.pyplot as plt
+
+        # Check to see if an axis handle was provided. If so, use this when
+        # plotting. If not, get the current axis managed by PyPlot.
+        if not axh:
+            axh = plt.gca()
 
         # Unpack data for plotting
         n = self.nX_fit.reshape((1, -1))
@@ -376,7 +389,7 @@ class FlowField:
         V = self.dX_fit[:, :, 1].reshape((1, -1))
 
         # Plot
-        plt.quiver(X[mask], Y[mask], U[mask], V[mask], color=color)
+        axh.quiver(X[mask], Y[mask], U[mask], V[mask], color=color)
 
         return None
 
@@ -548,3 +561,214 @@ def compare_flow_fields(F1, F2, n_min=1):
 
     return result
 
+
+def subplot_fixed(n_rows, n_cols, ax_size,
+                  x_margin=[200, 200],
+                  y_margin=[200, 300],
+                  ax_spacing=125):
+    """Create figure with subplots of a fixed size.
+
+    """
+    # Convert lists to arrays. This makes working with them easier.
+    ax_size = np.array(ax_size)
+    x_margin = np.array(x_margin)
+    y_margin = np.array(y_margin)
+
+    # Determine figure width and height (in pixels)
+    fw = ax_size[0] * n_cols + ax_spacing * (n_cols - 1) + x_margin.sum()
+    fh = ax_size[1] * n_rows + ax_spacing * (n_rows - 1) + y_margin.sum()
+    fig_size = np.array([fw, fh])
+
+    # Convert all sizes from pixels to normalized units
+    ax_size_norm = ax_size / fig_size
+    x_margin_norm = x_margin / fw
+    y_margin_norm = y_margin / fh
+    ax_spacing_norm = ax_spacing / fig_size
+
+    # Create figure
+    fig_size_in = fig_size / mpl.rcParams['figure.dpi']
+    fh = mpl.figure.Figure(figsize=fig_size_in)
+
+    # Define positions of subplots
+    x_pos = np.arange(n_cols) * (ax_size_norm[0] + ax_spacing_norm[0])
+    x_pos += x_margin_norm[0]
+    y_pos = np.arange(n_rows) * (ax_size_norm[1] + ax_spacing_norm[1])
+    y_pos += y_margin_norm[0]
+    y_pos = y_pos[::-1]  # Flip to use standard row/column ordering
+
+    # Iterate over rows and columns to create axes
+    axh = []
+    for r in range(n_rows):
+        rh = []  # List of axes for the current row
+        for c in range(n_cols):
+            # Add axis
+            rect = [x_pos[c], y_pos[r], ax_size_norm[0], ax_size_norm[1]]
+            rh.append(fh.add_axes(rect))
+
+            # Format axis -- remove top and right spines
+            rh[c].spines['top'].set_visible(False)
+            rh[c].spines['right'].set_visible(False)
+
+        axh.append(rh)
+
+    return fh, axh
+
+
+def plot_fig_4_proj_summary(results):
+    """Create summary plot for Fig. 4 analysis
+
+    Create the following plots for each comparison:
+    (1) Scatter plot of flow difference (color by target?)
+    (2) Scatter plot of voxel overlap (within vs across condition)
+    (3) Scatter plot of flow difference vs shared variance
+    """
+
+    def plot_scatter(axh, x, y, color, ax_label,
+                     plot_unity=True,
+                     link_axes=True,
+                     n_axis_ticks=3):
+        """Plot magnitude difference"""
+        axh.scatter(x, y, c=color, alpha=0.5)
+
+        # Axis limits
+        if link_axes:
+            x_lim = axh.get_xlim()
+            y_lim = axh.get_ylim()
+            ax_lim = [min(x_lim[0], y_lim[0]), max(x_lim[1], y_lim[1])]
+            axh.set_xlim(ax_lim)
+            axh.set_ylim(ax_lim)
+
+        # Set axis ticks
+        x_lim = axh.get_xlim()
+        x_tick = np.linspace(x_lim[0], x_lim[1], n_axis_ticks)
+        y_lim = axh.get_ylim()
+        y_tick = np.linspace(y_lim[0], y_lim[1], n_axis_ticks)
+        axh.set_xticks(x_tick)
+        axh.set_yticks(y_tick)
+
+
+        # Plot unity line
+        if plot_unity:
+            axh.plot(ax_lim, ax_lim, linestyle='--', color='black')
+
+        axh.set_xlabel(ax_label[0])
+        axh.set_ylabel(ax_label[1])
+        return None
+
+    # Setup figure
+    fh, axh = subplot_fixed(2, 4, [300, 300])
+
+    # Get colors for each observation'
+    color_map = define_color_map()
+    color = [color_map[cond]['dark'] for cond in results['targ_cond']]
+
+    # Plot magnitude difference -- this is the main result that shows whether
+    # the intuitive and rotated flow fields are similar.
+    col = 0
+    plot_scatter(
+        axh[0][col],
+        results['diff_int'],
+        results['diff_int_rot'],
+        color,
+        ['Flow difference (Int vs Int)', 'Flow difference (Int vs Rot)']
+    )
+    plot_scatter(
+        axh[1][col],
+        results['diff_rot'],
+        results['diff_int_rot'],
+        color,
+        ['Flow difference (Rot vs Rot)', 'Flow difference (Int vs Rot)']
+    )
+
+    # Plot difference vs shared variance -- this asks whether or not there is a
+    # relationship between the amount of shared variance in a given projection
+    # and the degree of flow field similarity.
+    col += 1
+    plot_scatter(
+        axh[0][col],
+        np.array(results['proj_shared_var']) * 100,
+        np.array(results['diff_int_rot']) - np.array(results['diff_int']),
+        color,
+        ['% shared variance', 'Change in flow difference (Int vs Rot - Int)'],
+        plot_unity=False,
+        link_axes=False
+    )
+    plot_scatter(
+        axh[1][col],
+        np.array(results['proj_shared_var']) * 100,
+        np.array(results['diff_int_rot']) - np.array(results['diff_rot']),
+        color,
+        ['% shared variance', 'Change in flow difference (Int vs Rot - Rot)'],
+        plot_unity=False,
+        link_axes=False
+    )
+
+    # Plot voxel overlap -- this asks whether the number of overlapping voxels
+    # is the same between the intuitive and rotated trajectories.
+    col += 1
+    plot_scatter(
+        axh[0][col],
+        results['n_overlap_int'],
+        results['n_overlap_int_rot'],
+        color,
+        ['Voxel overlap (Int vs Int)', 'Voxel overlap (Int vs Rot)']
+    )
+    plot_scatter(
+        axh[1][col],
+        results['n_overlap_rot'],
+        results['n_overlap_int_rot'],
+        color,
+        ['Voxel overlap (Rot vs Rot)', 'Voxel overlap (Int vs Rot)']
+    )
+
+    # Plot number of voxels vs flow field difference -- this tells whether the
+    # number of data points being compared influences our results. The thinking
+    # here is that comparisons made based on fewer points might be more
+    # variable/less reliable than those based on more points.
+    col += 1
+    ax_str = [
+        'Voxel overlap (Int vs Rot)',
+        'Change in flow difference (Int vs Rot - Int)'
+    ]
+    plot_scatter(
+        axh[0][col],
+        results['n_overlap_int_rot'],
+        np.array(results['diff_int_rot']) - np.array(results['diff_int']),
+        color,
+        ax_str,
+        plot_unity=False,
+        link_axes=False
+    )
+    ax_str = [
+        'Voxel overlap (Int vs Rot)',
+        'Change in flow difference (Int vs Rot - Rot)'
+    ]
+    plot_scatter(
+        axh[1][col],
+        results['n_overlap_int_rot'],
+        np.array(results['diff_int_rot']) - np.array(results['diff_rot']),
+        color,
+        ax_str,
+        plot_unity=False,
+        link_axes=False
+    )
+
+    # Add analysis text to figure
+    # Set figure title
+    title_str = [
+        'Subject: {}'.format(results['subject']),
+        'Dataset: {}'.format(results['dataset']),
+        'Projection mode: {}'.format(results['params']['projection_mode']),
+        '# projections: {}'.format(results['params']['n_proj']),
+        'Grid spacing: {}'.format(results['params']['grid_delta']),
+        'Grid min # overlap: {}'.format(results['params']['grid_n_min']),
+    ]
+    fh.text(
+        0.05, 1 - 0.05,
+        '\n'.join(title_str),
+        fontsize=12,
+        horizontalalignment='left',
+        verticalalignment='top'
+    )
+
+    return fh
