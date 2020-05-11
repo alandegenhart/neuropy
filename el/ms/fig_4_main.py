@@ -4,6 +4,8 @@
 import os
 import sys
 import numpy as np
+import scipy
+from scipy import stats
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -144,6 +146,9 @@ plt.show()
 
 # Orthonormalize
 C_orth, T, s, VH = gpfa.orthogonalize(gpfa_int['C'])
+S = np.diag(s)  # Diagonal matrix
+total_shared_var = s.sum()
+x_dim = T.shape[0]
 
 # Get neural trajectories for intuitive mapping
 U_int = df_int['decodeSpikeCounts'].apply(
@@ -175,18 +180,6 @@ for i in range(U_rot.shape[0]):
 U_orth_int = U_int.apply(lambda x: T @ x)
 U_orth_rot = U_rot.apply(lambda x: T @ x)
 
-# Eventually we'll want to define random projections. For now, hard-code
-# projections of the top 4 orthonormalized dimensions
-p_1 = np.zeros((2, dec_int['xDim']))
-p_2 = np.zeros((2, dec_int['xDim']))
-p_1[0, 0] = 1
-p_1[1, 1] = 1
-p_2[0, 2] = 1
-p_2[1, 3] = 1
-P = np.array([p_1, p_2])
-
-# TODO: add intuitive projection here as a sanity check
-
 # Get unique targets to plot. Should only have to do this for the intuitive
 # trials b/c both the intuitive and rotated use the same target config.
 targ_cond_unique = set(targ_cond_int)
@@ -196,37 +189,95 @@ col_map = tmp.define_color_map()
 line_col = {
     'int': 'xkcd:medium blue',
     'rot': 'xkcd:blood red',
-    'introt': 'xkcd:emerald green'
+    'introt': 'xkcd:gold'
 }
 
-
-# Setup figure size
-# TODO: figure out how to set up relative paths
-save_dir = '/Users/alandegenhart/results/el_ms/fig_4/proj/'
+# Plotting parameters
 fig_size = (20, 10)
 n_row = 2
 n_col = 4
+n_proj_plots = 10  # Number of projections to plot
 
-# Analysis parameters
-n_permute = 100  # Number of random permutations
+# Analysis parameters -- projections
+projection_mode = 'random'  # Either 'orth' or 'random'
+n_proj = 50
+n_permute = 25  # Number of random permutations
 
-# Grid parameters
+# Analysis parameters -- flow
 delta_grid = 2
 n_grid_min = 2
 
+# Define parameter dictionary
+params = {
+    'projection_mode': projection_mode,
+    'n_proj': n_proj,
+    'n_permute': n_permute,
+    'grid_delta': delta_grid,
+    'grid_n_min': n_grid_min
+}
+
+# Initialize results fields
+results = {
+    'subject': subject,
+    'dataset': dataset,
+    'params': params,
+    'targ_cond': [],
+    'diff_int': [],
+    'diff_rot': [],
+    'diff_int_rot': [],
+    'n_overlap_int': [],
+    'n_overlap_rot': [],
+    'n_overlap_int_rot': [],
+    'proj_shared_var': []
+}
+
+# Create/set saving directory
+home_dir = os.path.expanduser('~')
+save_dir_base = os.path.join(home_dir, 'results', 'el_ms', 'fig_4', 'flow_10D')
+params_str = [
+    results['subject'],
+    results['dataset'],
+    'projMode_{}'.format(params['projection_mode']),
+    'nProj_{}'.format(params['n_proj']),
+    'nPerm_{}'.format(params['n_permute']),
+    'gridDelta_{}'.format(params['grid_delta']),
+    'gridNMin_{}'.format(params['grid_n_min'])
+]
+params_str = '_'.join(params_str)
+save_dir = os.path.join(save_dir_base, params_str)
+os.makedirs(save_dir, exist_ok=True)
+
 # Iterate over projections
-n_proj = P.shape[0]
 for proj in range(n_proj):
-    # Setup figure. For now, each projection is a separate figure
-    fig = plt.figure(figsize=fig_size)
+    # Display status
+    print('Projection: {} of {}'.format(proj + 1, n_proj))
+
+    # Create figure if necessary
+    if proj < n_proj_plots:
+        fh, axh = tmp.subplot_fixed(2, 5, [300, 300])
+
+    # Define projection
+    if projection_mode == 'orth':
+        # Create identity vector
+        P = np.zeros((x_dim, 2))
+        dim = proj * 2
+        P[dim, 0] = 1
+        P[dim + 1, 1] = 1
+    elif projection_mode == 'random':
+        P = scipy.linalg.orth(np.random.randn(x_dim, 2))
+
+    # Calculate shared variance -- Note: this is for the projection, meaning
+    # that it will be the same for each target condition.
+    proj_shared_var = np.trace(P.T @ S @ P)
+    frac_shared_var = proj_shared_var/total_shared_var
 
     # Apply projection to data
-    U_proj_int = U_orth_int.apply(lambda U: P[proj, :, :] @ U)
-    U_proj_rot = U_orth_rot.apply(lambda U: P[proj, :, :] @ U)
+    U_proj_int = U_orth_int.apply(lambda U: P.T @ U)
+    U_proj_rot = U_orth_rot.apply(lambda U: P.T @ U)
 
     # Iterate over unique target conditions
     row = 0
-    for tcu in targ_cond_unique:
+    for row, tcu in enumerate(targ_cond_unique):
         # Get target condition masks for the two conditions
         tc_mask_int = [True if tc == tcu else False for tc in targ_cond_int]
         tc_mask_rot = [True if tc == tcu else False for tc in targ_cond_rot]
@@ -261,9 +312,7 @@ for proj in range(n_proj):
         n_overlap_introt = []
 
         # Iterate over permutations
-        # TODO: it's likely that this can be streamlined/cleaned up
-        #   substantially to avoid redundancy. Might not be worth the trouble
-        #   in this case, though.
+        # TODO: possibly streamline this?
         rng = np.random.default_rng()
         for p in range(n_permute):
             # Randomly permute indices.
@@ -308,118 +357,233 @@ for proj in range(n_proj):
             n_overlap_rot.append(diff_rot['n_overlap'])
             n_overlap_introt.append(diff_introt_1['n_overlap'])
 
+        # --- Summarize performance for the current projection/target pair ---
+        # Things to keep track of here:
+        # 1. Some measure of flow similarity (median?)
+        # 2. Degree of voxel overlap
+        # 3. Any p-values from statistical tests
+        # 4. Amount of shared variance for the projection
+
+        # Run statistical tests
+        diff_int_concat = np.concatenate(diff_int_all)
+        diff_rot_concat = np.concatenate(diff_rot_all)
+        diff_introt_concat = np.concatenate(diff_introt_all)
+
+        stats_int_introt = stats.ranksums(diff_int_concat, diff_introt_concat)
+        stats_rot_introt = stats.ranksums(diff_rot_concat, diff_introt_concat)
+
+        # Add data for the current projection to the results
+        results['targ_cond'].append(tcu)
+        results['diff_int'].append(np.median(diff_int_concat))
+        results['diff_rot'].append(np.median(diff_rot_concat))
+        results['diff_int_rot'].append(np.median(diff_introt_concat))
+        results['n_overlap_int'].append(np.mean(n_overlap_int))
+        results['n_overlap_rot'].append(np.mean(n_overlap_rot))
+        results['n_overlap_int_rot'].append(np.mean(n_overlap_introt))
+        results['proj_shared_var'].append(frac_shared_var)
+
+        # --- Plot results for current target condition ---
+
+        # Check to see if the projection is to be plotted
+        if proj >= n_proj_plots:
+            continue
+
+        # Get axis limits from the specified grid.
+        x_lim = F_int_1.grid['x'][[0, -1]]
+        y_lim = F_int_1.grid['y'][[0, -1]]
+
         # --- Subplot 1: Intuitive flow field ---
-        # Setup axis -- intuitive
-        plot_idx = row * 4 + 1  # Apparently subplot indices are 1-indexed
-        plt.subplot(n_row, n_col, plot_idx)
+        curr_ax = axh[row][0]
 
         # Plot intuitive flow field
-        F_int_1.plot(min_n=n_grid_min, color=col_map[tcu]['dark'])
+        F_int_1.plot(
+            min_n=n_grid_min,
+            color=col_map[tcu]['dark'],
+            axh=curr_ax
+        )
 
         # Plot intuitive trajectories -- currently using the last random
         # permutation
+        targ_cond_series = pd.Series([tcu] * n_trials)
         tmp.plot_traj(
-            U_proj_int.iloc[idx_perm_int[0:n_trials]],
-            pd.Series(targ_cond_int).iloc[idx_perm_int[0:n_trials]],
+            U_perm_int_1,
+            targ_cond_series,
             col_map,
             col_mode='light',
             line_width=0.5,
-            marker_size=7)
-        plt.title('Proj: {}, Targ: {}, Dec: {}'.format(proj, tcu, 'intuitive'))
+            marker_size=7,
+            axh=curr_ax
+        )
+        curr_ax.set_xlim(x_lim)
+        curr_ax.set_ylim(y_lim)
+        curr_ax.set_title(
+            'Proj: {}, Targ: {}, Dec: {}'.format(proj, tcu, 'intuitive'))
 
         # --- Subplot 2: Rotated flow field ---
-        # Setup axis -- rotated
-        plot_idx = row * 4 + 2
-        plt.subplot(n_row, n_col, plot_idx)
+        curr_ax = axh[row][1]
 
         # Plot rotated flow field
-        F_rot_1.plot(min_n=n_grid_min, color=col_map[tcu]['dark'])
+        F_rot_1.plot(
+            min_n=n_grid_min,
+            color=col_map[tcu]['dark'],
+            axh=curr_ax
+        )
 
         # Plot rotated trajectories -- currently using the last random
         # permutation
         tmp.plot_traj(
-            U_proj_rot.iloc[idx_perm_rot[0:n_trials]],
-            pd.Series(targ_cond_rot).iloc[idx_perm_rot[0:n_trials]],
+            U_perm_rot_1,
+            targ_cond_series,
             col_map,
             col_mode='light',
             line_width=0.5,
-            marker_size=7)
-        plt.title('Proj: {}, Targ: {}, Dec: {}'.format(proj, tcu, 'rotated'))
+            marker_size=7,
+            axh=curr_ax
+        )
+        curr_ax.set_xlim(x_lim)
+        curr_ax.set_ylim(y_lim)
+        curr_ax.set_title(
+            'Proj: {}, Targ: {}, Dec: {}'.format(proj, tcu, 'rotated'))
 
         # --- Subplot 3: Difference heat map ---
-        # Setup axis -- heatmap
-        plot_idx = row * 4 + 3  # Apparently subplot indices are 1-indexed
-        axh = plt.subplot(n_row, n_col, plot_idx)
+        curr_ax = axh[row][2]
 
-        axh.matshow(diff_introt_1['diff_grid'].T)
-        axh.set_ylim(0, F_int_1.n_grid + 1)
-        axh.xaxis.tick_bottom()
+        # Set extent for image
+        curr_ax.imshow(
+            diff_introt_1['diff_grid'].T,
+            cmap=plt.get_cmap('Greys'),
+            origin='lower',
+            extent=np.concatenate([x_lim, y_lim])
+        )
+        curr_ax.set_xlim(x_lim)
+        curr_ax.set_ylim(y_lim)
+        curr_ax.set_title('Overlapping voxels - int vs rot')
 
         # --- Subplot 4: Histogram of flow field differences ---
-        # Setup axis - histogram
-        plot_idx = row * 4 + 4  # Apparently subplot indices are 1-indexed
-        axh = plt.subplot(n_row, n_col, plot_idx)
+        curr_ax = axh[row][3]
 
         # Plot histogram -- intuitive vs intuitive
-        hist_data = np.concatenate(diff_int_all)
-        hist_data = hist_data[np.logical_not(np.isnan(hist_data))]
-        axh.hist(hist_data,
-                 bins=20,
-                 histtype='step',
-                 density=True,
-                 label='int vs int',
-                 color=line_col['int'])
-
-        # Plot histogram -- rotated vs rotated
-        hist_data = np.concatenate(diff_rot_all)
-        hist_data = hist_data[np.logical_not(np.isnan(hist_data))]
-        axh.hist(hist_data,
-                 bins=20,
-                 histtype='step',
-                 density=True,
-                 label='rot vs rot',
-                 color=line_col['rot'])
-
-        # Plot histogram -- intuitive vs rotated
-        hist_data = np.concatenate(diff_introt_all)
-        hist_data = hist_data[np.logical_not(np.isnan(hist_data))]
-        axh.hist(hist_data,
-                 bins=20,
-                 histtype='step',
-                 density=True,
-                 linewidth=2,
-                 label='int vs rot',
-                 color=line_col['introt'])
+        hist_data = [
+            diff_int_concat,
+            diff_rot_concat,
+            diff_introt_concat
+        ]
+        hist_labels = ['int vs int', 'rot vs rot', 'int vs rot']
+        hist_col = [line_col['int'], line_col['rot'], line_col['introt']]
+        curr_ax.hist(
+            hist_data,
+            bins=20,
+            histtype='stepfilled',
+            alpha=0.5,
+            density=True,
+            label=hist_labels,
+            color=hist_col)
 
         # Plot median values
-        y_lim = axh.get_ylim()
-        axh.plot(
+        y_lim = curr_ax.get_ylim()
+        curr_ax.plot(
             np.median(np.concatenate(diff_int_all)) * np.ones((2, )), y_lim,
             linestyle='--',
             color=line_col['int']
         )
-        axh.plot(
+        curr_ax.plot(
             np.median(np.concatenate(diff_rot_all)) * np.ones((2, )), y_lim,
             linestyle='--',
             color=line_col['rot']
         )
-        axh.plot(
+        curr_ax.plot(
             np.median(np.concatenate(diff_introt_all)) * np.ones((2, )), y_lim,
             linestyle='--',
             color=line_col['introt']
         )
 
         # Format plot
-        axh.legend()
-        axh.set_xlabel('Flow difference magnitude')
-        axh.set_ylabel('Density')
+        curr_ax.legend()
+        curr_ax.set_xlabel('Flow difference magnitude')
+        curr_ax.set_ylabel('Density')
 
-        row += 1  # Increment row counter (TODO: find a way to remove this)
+        # --- Subplot 5: median + CI ---
+        curr_ax = axh[row][4]
+
+        # Create box plots using the built-in matplotlib function
+        bplot = curr_ax.boxplot(
+            hist_data,
+            notch=True,
+            whis=[2.5, 97.5],
+            bootstrap=1000,
+            labels=hist_labels,
+            patch_artist=True,  # Needed to fill with color
+            medianprops={'color':'black'},
+            showfliers=False  # Don't show outliers
+        )
+
+        # Format plot -- set box colors
+        for p, c in zip(bplot['boxes'], line_col.values()):
+            p.set_facecolor(c)
+            p.set_alpha(0.7)
+
+        curr_ax.set_ylabel('Flow difference magnitude')
+        title_str = [
+            'Int vs IntRot: p = {:1.3e}'.format(stats_int_introt.pvalue),
+            'Rot vs IntRot: p = {:1.3e}'.format(stats_rot_introt.pvalue)
+        ]
+        # If either of the statistical test was significant, plot the title in
+        # bold green
+        if ((stats_int_introt.pvalue <= 0.05)
+                or (stats_int_introt.pvalue <= 0.05)):
+            font_weight = 'bold'
+            font_color = 'xkcd:emerald'
+        else:
+            font_weight = 'normal'
+            font_color = 'black'
+
+        curr_ax.set_title(
+            '\n'.join(title_str),
+            fontdict={'fontweight': font_weight, 'color': font_color}
+        )
+
+    # --- Format/save figure (only if plotting the current projection ---
+
+    # Continue to next iteration if not plotting
+    if proj >= n_proj_plots:
+        continue
+
+    # Set figure title
+    title_str = [
+        'Subject: {}'.format(subject),
+        'Dataset: {}'.format(dataset),
+        'Projection mode: {}'.format(projection_mode),
+        'Projection num: {}'.format(proj),
+        'Projection % shared variance: {:2.2f}'.format(100 * frac_shared_var)
+    ]
+    fh.text(
+        0.05, 1 - 0.05,
+        '\n'.join(title_str),
+        fontsize=12,
+        horizontalalignment='left',
+        verticalalignment='top'
+    )
 
     # Save figure
-    fig_name = '{}proj_{}.pdf'.format(save_dir, proj)
-    plt.savefig(fig_name)
-    plt.close()
+    fig_str = [
+        'FlowComp',
+        subject,
+        dataset,
+        projection_mode,
+        '{:03d}'.format(proj)
+    ]
+    fig_str = '_'.join(fig_str) + '.pdf'
+    fig_name = os.path.join(save_dir, fig_str)
+    fh.savefig(fig_name)
+
+# TODO: save results data here (in order to aggregate across datasets)
+
+#%% Plot results (eventually move this to a separate function)
+
+fh = tmp.plot_fig_4_proj_summary(results)
+fig_save_path = os.path.join(save_dir, 'Summary.pdf')
+fh.savefig(fig_save_path)
+
 
 #%% Notes
 
@@ -433,16 +597,18 @@ for proj in range(n_proj):
 
 # Next steps
 
+# Analysis:
+# TODO: collect results across projections (needed for random mode only)
+# TODO: summarize results
+# TODO: setup analysis as a standalone function
+# TODO: run analysis with different parameter values (voxel size, etc)
+
 # Things to do soon:
 # TODO: flip y-axis of decode state (currently this is in the Host coordinate system)
 # TODO: trajectory plotting - int and rotated in the same projection
 # TODO: new color mapping with slightly different colors for intuitive and rotated
 # TODO:  Implement FlowField class
 #    - NN-based method
-
-# Analysis:
-# TODO: Quantification of similarity for two flow fields
-# TODO: Random projections
 
 # Things to do eventually:
 # TODO: Outer wrapper to generate plots (create figure layout, etc.)
