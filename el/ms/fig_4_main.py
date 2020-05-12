@@ -3,7 +3,16 @@ import os
 import fig_4_module as f4
 
 # Define data path
-base_dir = os.path.join(os.sep, 'Volumes', 'Samsung_T5', 'Batista', 'Animals')
+mode = 'local'
+if mode == 'local':
+    base_dir = os.path.join(
+        os.sep, 'Volumes', 'Samsung_T5', 'Batista', 'Animals'
+    )
+elif mode == 'remote':
+    base_dir = os.path.join(
+        os.sep, 'afs', 'ece.cmu.edu', 'project', 'nspg', 'data',
+        'batista', 'el', 'Animals'
+    )
 
 # Define subject and dataset
 subject = 'Earl'
