@@ -501,6 +501,11 @@ def define_comparison_conditions(targ_cond, tcu):
 def plot_flow_ex(subject, dataset, flow_ex, comp_cond, params):
     """Create example flow field plots."""
 
+    import copy
+
+    # Plotting constants
+    hist_bar_width = {'flow': 0.5, 'overlap': 1}
+
     # Set up directory for saving results
     home_dir = os.path.expanduser('~')
     save_dir_base = os.path.join(
@@ -573,17 +578,33 @@ def plot_flow_ex(subject, dataset, flow_ex, comp_cond, params):
                 x_margin=[200, 200],
                 y_margin=[200, 300])
 
+            # Get the 'base' data for histograms. There will be two sets of
+            # data -- one for the flow difference, and one for the overlap.
+            base_comp_cond_targ = comp_cond[targ_idx][0]['targ'][0]
+            hd_targ_idx = np.argwhere(
+                [hd_targ == base_comp_cond_targ for hd_targ in hd['targ']])
+            hd_targ_idx = hd_targ_idx[0][0]
+            flow_data_base = hd['flow_diff']['int_vs_rot'][hd_targ_idx]
+            overlap_data_base = hd['n_overlap']['int_vs_rot'][hd_targ_idx]
+            data_range = {'flow': [], 'overlap': []}
+
             # Iterate over comparisons
             for cc_idx, cc in enumerate(targ_diff):
 
                 # Get specific condition
                 cond = comp_cond[targ_idx][cc_idx]
+                diff_cond = dd[targ_idx][cc_idx]['diff']
+                invalid_mask = np.isnan(diff_cond['diff_grid'])
+
+                # Find matching target index in the hist data. This *should*
+                # be the same as 'targ_idx', but check just to be sure.
 
                 # Iterate over flow fields
                 for flow_idx, flow_mask in enumerate(cc['mask']):
 
-                    # Get flow field and trajectories
-                    F = fd[flow_mask]['flow'].iloc[0]
+                    # Get flow field and trajectories. Get a copy of F b/c we
+                    # will modify this when plotting
+                    F = copy.deepcopy(fd[flow_mask]['flow'].iloc[0])
                     U = fd[flow_mask]['U'].iloc[0]
 
                     # Setup plot for flow field
@@ -614,6 +635,8 @@ def plot_flow_ex(subject, dataset, flow_ex, comp_cond, params):
                     )
                     curr_ax.set_xlim(x_lim)
                     curr_ax.set_ylim(y_lim)
+                    curr_ax.set_xlabel('Projection dim. 1')
+                    curr_ax.set_ylabel('Projection dim. 2')
                     curr_ax.set_title(
                         'Targ: {}, Dec: {}\nSplit: {}, Seq: {}'.format(
                             cond['targ'][flow_idx],
@@ -624,9 +647,16 @@ def plot_flow_ex(subject, dataset, flow_ex, comp_cond, params):
                     )
 
                     # Plot flow field (on separate plot)
+                    # NOTE -- when plotting the flow fields for the two
+                    # comparison conditions, we want to only plot the valid
+                    # points. To do this, we can use the 'diff_grid' for the
+                    # comparison being plotted to generate a mask of valid
+                    # voxels, and zero-out the rest. Because of this, only use
+                    # a 'min_n' value of 1
+                    F.nX_fit[invalid_mask] = 0
                     curr_ax = axh[cc_idx][2]
                     F.plot(
-                        min_n=params['grid_n_min'],
+                        min_n=1,
                         color=col_flow[cond['targ'][flow_idx]][flow_idx],
                         axh=curr_ax
                     )
@@ -634,11 +664,109 @@ def plot_flow_ex(subject, dataset, flow_ex, comp_cond, params):
                 # Format flow field comparison plot
                 curr_ax.set_xlim(x_lim)
                 curr_ax.set_ylim(y_lim)
+                curr_ax.set_xlabel('Projection dim. 1')
+                curr_ax.set_ylabel('Projection dim. 2')
                 curr_ax.set_title(
                     'Flow field comparision:\n{}'.format(cond['name'])
                 )
 
-                # --- Plotting of histograms goes here ---
+                # --- Plot histograms ---
+                # First, find the histogram data target index. This should be
+                # the same as the targ_idx, but double-check just to make sure.
+                hd_targ_idx = np.argwhere(
+                    [hd_targ == cond['targ'][0] for hd_targ in hd['targ']])
+                hd_targ_idx = hd_targ_idx[0][0]
+
+                # Histogram 1 -- flow field difference
+                curr_ax = axh[cc_idx][3]
+                flow_data = hd['flow_diff'][cond['name']][hd_targ_idx]
+
+                hist_data = [
+                    flow_data_base,
+                    flow_data
+                ]
+                hist_data_concat = np.concatenate(hist_data)
+                data_range_temp = [
+                    hist_data_concat.min(), hist_data_concat.max()]
+                data_range['flow'].append(data_range_temp)
+                bins = np.arange(
+                    0,
+                    data_range_temp[1] + hist_bar_width['flow'],
+                    hist_bar_width['flow'])
+                hist_labels = ['int_vs_rot', cond['name']]
+                hist_col = ['xkcd:grey', 'xkcd:gold']
+                curr_ax.hist(
+                    hist_data,
+                    bins=bins,
+                    histtype='stepfilled',
+                    alpha=0.7,
+                    density=True,
+                    label=hist_labels,
+                    color=hist_col)
+
+                # Format plot
+                curr_ax.legend()
+                curr_ax.set_xlabel('Flow difference magnitude')
+                curr_ax.set_ylabel('Density')
+                curr_ax.set_title('Flow field comparison\nFlow difference')
+
+                # Histogram 2 -- Number of overlapping voxels
+                curr_ax = axh[cc_idx][4]
+                overlap_data = hd['n_overlap'][cond['name']][hd_targ_idx]
+
+                hist_data = [
+                    overlap_data_base,
+                    overlap_data
+                ]
+                hist_data_concat = np.concatenate(hist_data)
+                data_range_temp = [
+                    hist_data_concat.min(), hist_data_concat.max()]
+                data_range['overlap'].append(data_range_temp)
+                bins = np.arange(
+                    data_range_temp[0] - hist_bar_width['overlap'] - 0.5,
+                    data_range_temp[1] + hist_bar_width['overlap'] + 0.5,
+                    hist_bar_width['overlap'])
+                hist_col = ['xkcd:grey', 'xkcd:gold']
+                curr_ax.hist(
+                    hist_data,
+                    bins=bins,
+                    histtype='stepfilled',
+                    alpha=0.7,
+                    density=True,
+                    label=hist_labels,
+                    color=hist_col)
+
+                # Format plot
+                curr_ax.legend()
+                curr_ax.set_xlabel('Number of overlapping voxels')
+                curr_ax.set_ylabel('Density')
+                curr_ax.set_title('Flow field comparison\nVoxel overlap')
+
+            # Go back through histograms and make the axes the same. Also add
+            #
+            ax_lim = {
+                f: [np.array(r).min(), np.array(r).max()]
+                for f, r in data_range.items()
+            }
+            for row, ax_row in enumerate(axh):
+                # Set histogram axis limits
+                ax_row[3].set_xlim(ax_lim['flow'])
+                ax_row[4].set_xlim(ax_lim['overlap'])
+
+                # Add text for condition
+                ax_pos = np.array(ax_row[0].get_position())
+                text_pos_x = ax_pos[0][0]/3
+                text_pos_y = ax_pos[:, 1].mean()
+                fh.text(
+                    text_pos_x,
+                    text_pos_y,
+                    comp_cond[targ_idx][row]['name'],
+                    fontsize=20,
+                    horizontalalignment='center',
+                    verticalalignment='center',
+                    fontweight='bold',
+                    rotation=90
+                )
 
             # Set figure title
             title_str = [
@@ -673,131 +801,144 @@ def plot_flow_ex(subject, dataset, flow_ex, comp_cond, params):
             fig_name = os.path.join(save_dir, fig_str)
             fh.savefig(fig_name)
 
-    # Anything else that needs to be done here?
     return None
 
 
-    # Plot Set 1: flow fields with trajectories
-    # First, iterate over comparisons and plot flow field examples. These will
-    # consist of 3 plots per comparison condition -- the flow field +
-    # trajectories for each condition (plots 1 and 2), as well as the 'overlap'
-    # flow field, which shows the flow vectors for the two conditions on the
-    # same plot without trajectories.
+def plot_flow_results(subject, dataset, results, params):
+    """Plot summary of flow field comparisons."""
 
-    # Plot Set 2: histograms
-    # Here, we want to plot the distributions of the flow difference and
-    # overlap distributions for each comparision.  For ease of visualization,
-    # it would probably be best if these histograms all were with respect to the
-    # int vs rot distribution, and had the same axis limits and bin sizes
+    def plot_scatter(axh, x, y, color, ax_label,
+                     plot_unity=True,
+                     link_axes=True,
+                     n_axis_ticks=3):
+        """Scatter plot with options"""
+        axh.scatter(x, y, c=color, alpha=0.5)
 
-def plot_flow_results(results, flow_ex):
-    # --- Plot results for current target condition ---
-    """
+        # Axis limits
+        if link_axes:
+            x_lim = axh.get_xlim()
+            y_lim = axh.get_ylim()
+            ax_lim = [min(x_lim[0], y_lim[0]), max(x_lim[1], y_lim[1])]
+            axh.set_xlim(ax_lim)
+            axh.set_ylim(ax_lim)
 
-    # Define colormap (used for plotting)
-    col_map = tmp.define_color_map()
-    line_col = {
-        'int': 'xkcd:medium blue',
-        'rot': 'xkcd:blood red',
-        'introt': 'xkcd:gold'
-    }
+        # Set axis ticks
+        x_lim = axh.get_xlim()
+        x_tick = np.linspace(x_lim[0], x_lim[1], n_axis_ticks)
+        y_lim = axh.get_ylim()
+        y_tick = np.linspace(y_lim[0], y_lim[1], n_axis_ticks)
+        axh.set_xticks(x_tick)
+        axh.set_yticks(y_tick)
 
-    # Check to see if the projection is to be plotted
-    if proj >= params['n_proj_plots']:
-        continue
+        # Plot unity line
+        if plot_unity:
+            axh.plot(ax_lim, ax_lim, linestyle='--', color='black')
 
-    # Get axis limits from the specified grid.
-    x_lim = F_int_1.grid['x'][[0, -1]]
-    y_lim = F_int_1.grid['y'][[0, -1]]
+        axh.set_xlabel(ax_label[0])
+        axh.set_ylabel(ax_label[1])
+        return None
 
-    # --- Subplot 1: Intuitive flow field ---
-    curr_ax = axh[row][0]
+    # Get keys -- these define the comparison conditions
+    comp_cond = results['flow_diff'].keys()
+    base_cond = 'int_vs_rot'
+    comp_cond = [c for c in comp_cond if c != base_cond]
 
-    # Plot intuitive flow field
-    F_int_1.plot(
-        min_n=params['grid_n_min'],
-        color=col_map[tcu]['dark'],
-        axh=curr_ax
+    # Setup figure
+    fh, axh = tmp.subplot_fixed(
+        len(comp_cond), 2, [300, 300],
+        x_margin=[200, 200],
+        y_margin=[200, 200]
     )
 
-    # Plot intuitive trajectories -- currently using the last random
-    # permutation
-    targ_cond_series = pd.Series([tcu] * n_trials)
-    tmp.plot_traj(
-        U_perm_int_1,
-        targ_cond_series,
-        col_map,
-        col_mode='light',
-        line_width=0.5,
-        marker_size=7,
-        axh=curr_ax
-    )
-    curr_ax.set_xlim(x_lim)
-    curr_ax.set_ylim(y_lim)
-    curr_ax.set_title(
-        'Proj: {}, Targ: {}, Dec: {}'.format(proj, tcu, 'intuitive'))
-
-    # --- Subplot 2: Rotated flow field ---
-    curr_ax = axh[row][1]
-
-    # Plot rotated flow field
-    F_rot_1.plot(
-        min_n=params['grid_n_min'],
-        color=col_map[tcu]['dark'],
-        axh=curr_ax
-    )
-
-    # Plot rotated trajectories -- currently using the last random
-    # permutation
-    tmp.plot_traj(
-        U_perm_rot_1,
-        targ_cond_series,
-        col_map,
-        col_mode='light',
-        line_width=0.5,
-        marker_size=7,
-        axh=curr_ax
-    )
-    curr_ax.set_xlim(x_lim)
-    curr_ax.set_ylim(y_lim)
-    curr_ax.set_title(
-        'Proj: {}, Targ: {}, Dec: {}'.format(proj, tcu, 'rotated'))
-
-    # --- Subplot 3: Difference heat map ---
-    curr_ax = axh[row][2]
-
-    # Set extent for image
-    curr_ax.imshow(
-        diff_introt_1['diff_grid'].T,
-        cmap=plt.get_cmap('Greys'),
-        origin='lower',
-        extent=np.concatenate([x_lim, y_lim])
-    )
-    curr_ax.set_xlim(x_lim)
-    curr_ax.set_ylim(y_lim)
-    curr_ax.set_title('Overlapping voxels - int vs rot')
-
-    # --- Subplot 4: Histogram of flow field differences ---
-    curr_ax = axh[row][3]
-
-    # Plot histogram -- intuitive vs intuitive
-    hist_data = [
-        diff_int_concat,
-        diff_rot_concat,
-        diff_introt_concat
+    # Get colors for each observation
+    color_map = tmp.define_color_map()
+    color = [
+        [color_map[targ]['dark'] for targ in proj_targ]
+        for proj_targ in results['targ']
     ]
-    hist_labels = ['int vs int', 'rot vs rot', 'int vs rot']
-    hist_col = [line_col['int'], line_col['rot'], line_col['introt']]
-    curr_ax.hist(
-        hist_data,
-        bins=20,
-        histtype='stepfilled',
-        alpha=0.5,
-        density=True,
-        label=hist_labels,
-        color=hist_col)
+    color_list = [c for col_row in color for c in col_row]
 
-    # Plot median values
+    comp_fields = ['flow_diff', 'n_overlap']
+
+    # Iterate over rows
+    for row, cc in enumerate(comp_cond):
+
+        # Iterate over comparisons
+        for col, cf in enumerate(comp_fields):
+
+            # Set current axis
+            curr_ax = axh[row][col]
+
+            # Get data to plot and transform to 1D
+            scatter_data = {'x': results[cf][base_cond], 'y': results[cf][cc]}
+            scatter_data = {
+                k: [item for item_row in v for item in item_row]
+                for k, v in scatter_data.items()
+            }
+            axis_labels = [
+                '{} - {}'.format(cf, base_cond),
+                '{} - {}'.format(cf, cc)
+            ]
+            plot_scatter(
+                curr_ax,
+                scatter_data['x'],
+                scatter_data['y'],
+                color_list,
+                axis_labels
+            )
+
+    # Set up directory for saving results
+    home_dir = os.path.expanduser('~')
+    save_dir_base = os.path.join(
+        home_dir, 'results', 'el_ms', 'fig_4', 'flow_10D')
+    params_str = [
+        subject,
+        dataset,
+        'projMode_{}'.format(params['projection_mode']),
+        'nProj_{}'.format(params['n_proj']),
+        'nPerm_{}'.format(params['n_permute']),
+        'gridDelta_{}'.format(params['grid_delta']),
+        'gridNMin_{}'.format(params['grid_n_min'])
+    ]
+    params_str = '_'.join(params_str)
+    save_dir = os.path.join(save_dir_base, params_str)
+    os.makedirs(save_dir, exist_ok=True)
+
+    # Add analysis text to figure
+    # Set figure title
+    title_str = [
+        'Subject: {}'.format(subject),
+        'Dataset: {}'.format(dataset),
+        'Projection mode: {}'.format(params['projection_mode']),
+        'Grid spacing: {}'.format(params['grid_delta']),
+        'Grid min # overlap: {}'.format(params['grid_n_min'])
+    ]
+    fh.text(
+        0.01, 1 - 0.01,
+        '\n'.join(title_str),
+        fontsize=12,
+        horizontalalignment='left',
+        verticalalignment='top'
+    )
+
+    # Save figure
+    fig_str = [
+        'FlowComp',
+        subject,
+        dataset,
+        params['projection_mode'],
+        'summary'
+    ]
+    fig_str = '_'.join(fig_str) + '.pdf'
+    fig_name = os.path.join(save_dir, fig_str)
+    fh.savefig(fig_name)
+
+    return None
+
+
+"""Old plotting code here
+
+# Plot median values
     y_lim = curr_ax.get_ylim()
     curr_ax.plot(
         np.median(np.concatenate(diff_int_all)) * np.ones((2, )),
@@ -863,50 +1004,4 @@ def plot_flow_results(results, flow_ex):
         fontdict={'fontweight': font_weight, 'color': font_color}
     )
 
-    # --- Format/save figure (only if plotting the current projection ---
-
-    # Continue to next iteration if not plotting
-    if proj >= params['n_proj_plots']:
-        continue
-
-    # Set figure title
-    title_str = [
-        'Subject: {}'.format(subject),
-        'Dataset: {}'.format(dataset),
-        'Projection mode: {}'.format(params['projection_mode']),
-        'Projection num: {}'.format(proj),
-        'Grid spacing: {}'.format(params['grid_delta']),
-        'Grid min # overlap: {}'.format(params['grid_n_min']),
-        'Projection % shared variance: {:2.2f}'.format(100
-                                                       * frac_shared_var)
-    ]
-    fh.text(
-        0.05, 1 - 0.05,
-        '\n'.join(title_str),
-        fontsize=12,
-        horizontalalignment='left',
-        verticalalignment='top'
-    )
-
-    # Save figure
-    fig_str = [
-        'FlowComp',
-        subject,
-        dataset,
-        params['projection_mode'],
-        '{:03d}'.format(proj)
-    ]
-    fig_str = '_'.join(fig_str) + '.pdf'
-    fig_name = os.path.join(save_dir, fig_str)
-    fh.savefig(fig_name)
-
-    # TODO: save results data here (in order to aggregate across datasets)
-
-    # Plot results
-    fh = tmp.plot_fig_4_proj_summary(results)
-    fig_save_path = os.path.join(save_dir, 'Summary.pdf')
-    fh.savefig(fig_save_path)
-    """
-
-    return None
-
+"""
