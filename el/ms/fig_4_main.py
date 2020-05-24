@@ -47,10 +47,10 @@ pool_size = 8
 # Define parameter dictionary
 params = {
     'projection_mode': ['random', 'orth'],
-    'n_proj': [10],
-    'n_permute': [10],
-    'grid_delta': [1.5],
-    'grid_n_min': [2],
+    'n_proj': [500],
+    'n_permute': [100],
+    'grid_delta': [1, 1.5, 2.5, 3],
+    'grid_n_min': [1, 2, 3],
     'n_proj_plots': [20]
 }
 
