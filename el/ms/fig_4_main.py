@@ -19,6 +19,8 @@ def main_fun(args):
     f4.plot_flow_results(
         args['subject'], args['dataset'], results, args['params'])
 
+    return results, flow_ex, comp_cond
+
 
 # Check input arguments. Currently this script accepts one input argument, which
 # specifies whether to use the local or remote path.
@@ -46,10 +48,10 @@ pool_size = 8
 
 # Define parameter dictionary
 params = {
-    'projection_mode': ['random', 'orth'],
+    'projection_mode': ['orth', 'random'],
     'n_proj': [500],
     'n_permute': [100],
-    'grid_delta': [1, 1.5, 2.5, 3],
+    'grid_delta': [1, 1.5, 2, 2.5, 3],
     'grid_n_min': [1, 2, 3],
     'n_proj_plots': [20]
 }
@@ -72,6 +74,6 @@ if use_multiproc:
         pool.map(main_fun, all_params)
 else:
     for params in all_params:
-        main_fun(params)
+        results, flow_ex, comp_cond = main_fun(params)
 
 
