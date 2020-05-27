@@ -936,6 +936,58 @@ def plot_flow_results(subject, dataset, results, params):
     return None
 
 
+def params_to_name(subject, dataset, params):
+    """Convert parameters to name string and get save directory."""
+    # Set up directory for saving results
+    home_dir = os.path.expanduser('~')
+    save_dir_base = os.path.join(
+        home_dir, 'results', 'el_ms', 'fig_4', 'flow_10D')
+    params_str = [
+        subject,
+        dataset,
+        'projMode_{}'.format(params['projection_mode']),
+        'nProj_{}'.format(params['n_proj']),
+        'nPerm_{}'.format(params['n_permute']),
+        'gridDelta_{}'.format(params['grid_delta']),
+        'gridNMin_{}'.format(params['grid_n_min'])
+    ]
+    params_str = '_'.join(params_str)
+    save_dir = os.path.join(save_dir_base, params_str)
+    os.makedirs(save_dir, exist_ok=True)
+
+    return save_dir, params_str
+
+
+def save_results(results):
+    """Save projection results to disk."""
+
+    import pickle
+
+    # Define save path
+    save_dir, params_str = params_to_name(
+        results['subject'], results['dataset'], results['params'])
+    save_file = os.path.join(save_dir, '{}.pickle'.format(params_str))
+
+    # Write to disk
+    file = open(save_file, 'wb')
+    pickle.dump(results, file)
+    file.close()
+
+    return None
+
+
+def load_results(file_path):
+    """Load saved results from disk."""
+
+    import pickle
+
+    file = open(file_path, 'rb')
+    results = pickle.load(file)
+    file.close()
+
+    return results
+
+
 """Old plotting code here
 
 # Plot median values
