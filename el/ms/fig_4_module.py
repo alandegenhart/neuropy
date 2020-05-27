@@ -397,7 +397,7 @@ def flow_analysis(subject, dataset, params, base_dir):
 
                 # Calculate summary statistics for distributions
                 flow_diff_median[cc['name']].append(np.median(flow_diff_concat))
-                n_overlap_mean[cc['name']].append(np.mean(flow_diff_concat))
+                n_overlap_mean[cc['name']].append(np.mean(n_overlap))
 
             # Add target name to hist data dict
             hist_data['targ'].append(cc_targ[0]['targ'][0])
