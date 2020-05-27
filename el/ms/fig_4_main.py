@@ -19,7 +19,20 @@ def main_fun(args):
     f4.plot_flow_results(
         args['subject'], args['dataset'], results, args['params'])
 
-    return results, flow_ex, comp_cond
+    # Pack results up into a single dict
+    results_dict = {
+        'subject': args['subject'],
+        'dataset': args['dataset'],
+        'params': args['params'],
+        'proj_results': results,
+        'flow_ex': flow_ex,
+        'cond': comp_cond
+    }
+
+    # Save results
+    f4.save_results(results_dict)
+
+    return results
 
 
 # Check input arguments. Currently this script accepts one input argument, which
@@ -45,16 +58,27 @@ subject = 'Earl'
 dataset = '20180927'
 use_multiproc = True
 pool_size = 8
+debug = False
 
 # Define parameter dictionary
-params = {
-    'projection_mode': ['orth', 'random'],
-    'n_proj': [500],
-    'n_permute': [100],
-    'grid_delta': [1, 1.5, 2, 2.5, 3],
-    'grid_n_min': [1, 2, 3],
-    'n_proj_plots': [20]
-}
+if debug:
+    params = {
+        'projection_mode': ['orth'],
+        'n_proj': [10],
+        'n_permute': [10],
+        'grid_delta': [1],
+        'grid_n_min': [1],
+        'n_proj_plots': [20]
+    }
+else:
+    params = {
+        'projection_mode': ['orth', 'random'],
+        'n_proj': [500],
+        'n_permute': [100],
+        'grid_delta': [1, 1.5, 2, 2.5, 3],
+        'grid_n_min': [1, 2, 3],
+        'n_proj_plots': [20]
+    }
 
 # Define possible parameter sets. Create an array of dicts to pass to the main
 # function in order to use multiprocessing if desired.
@@ -74,6 +98,6 @@ if use_multiproc:
         pool.map(main_fun, all_params)
 else:
     for params in all_params:
-        results, flow_ex, comp_cond = main_fun(params)
+        results = main_fun(params)
 
 
