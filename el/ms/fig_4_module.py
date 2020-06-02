@@ -8,6 +8,7 @@ import scipy
 from scipy import stats
 import pandas as pd
 import matplotlib as mpl
+import copy
 
 # Custom modules
 home_dir = os.path.expanduser('~')
@@ -163,27 +164,29 @@ def flow_analysis(subject, dataset, params, base_dir):
     # Before iterating over projections, first get the sets of indices for
     # each dataset (intuitive and rotated)
     # Create a dict with the various combinations
-    trial_idx = {'targ': [], 'dec': [], 'idx': [], 'n_trials': [], 'seq': []}
+    flow_cond = {'targ': [], 'dec': [], 'n_trials': [], 'seq': []}
+    trial_idx = {}
     targ_cond_all = {'int': targ_cond_int, 'rot': targ_cond_rot}
     dec_cond = ['int', 'rot']  # Decoder conditions
     targ_cond = list(targ_cond_unique)  # Unique target conditions
     seq_cond = ['normal', 'reversed']
     comp_cond = []  # List of comparison conditions to evaluate
     for row, tcu in enumerate(targ_cond):
+        trial_idx[tcu] = {}
         for dec in dec_cond:
             # Get mask for current dataset
             mask_tc_dec = [True if tc == tcu else False
                            for tc in targ_cond_all[dec]]
             idx_tc_dec = np.argwhere(mask_tc_dec)[:, 0]  # shape: (n_trials, )
+            trial_idx[tcu][dec] = idx_tc_dec
 
             # Iterate over sequence orders
             for s in seq_cond:
                 # Append to dictionary
-                trial_idx['targ'].append(tcu)
-                trial_idx['dec'].append(dec)
-                trial_idx['idx'].append(idx_tc_dec)
-                trial_idx['n_trials'].append(len(idx_tc_dec))
-                trial_idx['seq'].append(s)
+                flow_cond['targ'].append(tcu)
+                flow_cond['dec'].append(dec)
+                flow_cond['n_trials'].append(len(idx_tc_dec))
+                flow_cond['seq'].append(s)
 
         comp_cond.append(define_comparison_conditions(targ_cond, tcu))
 
@@ -191,11 +194,11 @@ def flow_analysis(subject, dataset, params, base_dir):
     # we're doing a 50/50 split, this will be the minimum across the various
     # datasets/target combinations divided by 2 and rounded down.
     n_split = 2
-    n_trials_split = (np.min(trial_idx['n_trials'])/n_split).astype(int)
+    n_trials_split = (np.min(flow_cond['n_trials'])/n_split).astype(int)
 
     # Covert trial index dictionary to a dataframe. This will make it easier to
     # iterate over the rows. Also perform other initialization procedures.
-    trial_idx = pd.DataFrame(trial_idx)
+    flow_cond = pd.DataFrame(flow_cond)
     flow_cols = ['targ', 'dec', 'trial_split', 'seq', 'U', 'flow']
     rng = np.random.default_rng()
 
@@ -278,13 +281,19 @@ def flow_analysis(subject, dataset, params, base_dir):
                 'flow': []
             }
 
-            # Iterate over rows in the set of trial indices
-            for row in trial_idx.itertuples(index=False):
+            # Permute indices. For do this for each target/decoder condition
+            rnd_trial_idx = copy.deepcopy(trial_idx)
+            for tcu in trial_idx.keys():
+                for dec in trial_idx[tcu].keys():
+                    idx_temp = np.array(trial_idx[tcu][dec], dtype=int)
+                    rnd_idx = rng.permutation(idx_temp.shape[0])
+                    rnd_trial_idx[tcu][dec] = idx_temp[rnd_idx]
 
-                # Permute trial indices
-                row_idx = row.idx
-                rnd_idx = rng.permutation(row_idx.shape[0])
-                row_idx = row_idx[rnd_idx]  # Shuffle indices
+            # Iterate over rows in the set of trial indices
+            for row in flow_cond.itertuples(index=False):
+
+                # Get indices for current condition
+                row_idx = rnd_trial_idx[row.targ][row.dec]
 
                 # Iterate over splits
                 for i in range(n_split):
@@ -986,6 +995,203 @@ def load_results(file_path):
     file.close()
 
     return results
+
+
+def plot_flow_summary_hist(results_dict):
+    """Plot summary of flow field comparisons."""
+
+    def plot_hist(axh, hist_dict, col,
+                  bins=20, ax_label=['data', 'counts'], n_axis_ticks=3,
+                  norm_flag=True, density_flag=False):
+        """Histogram plot with options"""
+
+        axh.hist(
+            hist_dict.values(),
+            bins=bins,
+            histtype='stepfilled',
+            alpha=0.65,
+            density=density_flag,
+            label=hist_dict.keys(),
+            color=col)
+
+        # Set axis ticks
+        x_lim = axh.get_xlim()
+        if norm_flag:
+            x_tick = np.array([0, 1])
+        else:
+            x_tick = np.linspace(
+                x_lim[0], x_lim[1], n_axis_ticks)
+
+        y_lim = axh.get_ylim()
+        y_tick = np.linspace(
+            np.ceil(y_lim[0]), np.floor(y_lim[1]), n_axis_ticks)
+        axh.set_xticks(x_tick)
+        axh.set_yticks(y_tick)
+
+        # Format plot
+        axh.legend()
+        axh.set_xlabel(ax_label[0])
+        axh.set_ylabel(ax_label[1])
+
+        return None
+
+    def normalize_hist_data(hist_dict, zero_cond, one_cond):
+        """Normalize histogram data.
+
+        To normalize, we subtract the zero condition and divide by the one
+        condition.
+        """
+        z = np.mean(hist_dict[zero_cond])
+        o = np.mean(hist_dict[one_cond] - z)
+        hist_dict_norm = {
+            k: (data - z) / o
+            for k, data in hist_dict.items()
+        }
+
+        return hist_dict_norm
+
+    # Set up comparisons
+    hist_cond = [
+        ['int_vs_rot', 'int_vs_int', 'int_vs_int_alt', 'int_vs_int_rev'],
+        ['int_vs_rot', 'rot_vs_rot', 'rot_vs_rot_alt', 'rot_vs_rot_rev']
+    ]
+    flow_metrics = ['flow_diff', 'n_overlap']
+    norm_cond_idx = {
+        'flow_diff': [1, 3],
+        'n_overlap': [2, 1]
+    }
+
+    def bar_plot(axh, hist_dict, col):
+        """Create bar + whisker plot for flow data."""
+
+        # Plot limits
+
+        n_items = len(hist_dict.values())
+        axh.plot([0.5, n_items + 0.5], [0, 0], 'k--')
+        axh.plot([0.5, n_items + 0.5], [1, 1], 'k--')
+
+        '''
+        # Box plot
+        bplot = axh.boxplot(
+            hist_dict.values(),
+            notch=True,
+            whis=[2.5, 97.5],
+            bootstrap=1000,
+            labels=hist_dict.keys(),
+            patch_artist=True,  # Needed to fill with color
+            medianprops={'color': 'black'},
+            showfliers=False  # Don't show outliers
+        )
+
+        # Format plot -- set box colors
+        for p, c in zip(bplot['boxes'], col):
+            p.set_facecolor(c)
+            p.set_alpha(0.7)
+        '''
+
+        # Plot mean and standard deviation
+        labels = hist_dict.keys()
+        data = hist_dict.values()
+        x = 0
+        for l, d, c in zip(labels, data, col):
+            x += 1
+            y_mean = d.mean()
+            y_std = d.std()
+            curr_ax.errorbar(x, y_mean, yerr=y_std, color=c)
+            curr_ax.plot(x, y_mean, marker='o', color=c)
+
+        return None
+
+    # Setup figure
+    fh, axh = tmp.subplot_fixed(
+        len(hist_cond), len(flow_metrics) * 2, [400, 300],
+        x_margin=[200, 200],
+        y_margin=[200, 200]
+    )
+
+    # Define colors
+    hist_col = [
+        'xkcd:emerald green',
+        'xkcd:ocean blue',
+        'xkcd:gold',
+        'xkcd:dark red'
+    ]
+
+    # Iterate over rows/hist cond
+    for cond_idx, cond in enumerate(hist_cond):
+        # Iterate over metrics
+        for m_idx, m in enumerate(flow_metrics):
+            # Get histogram data
+            hist_dict = {
+                c: np.array(results_dict['proj_results'][m][c]).reshape((-1,))
+                for c in cond
+            }
+            zero_cond = cond[norm_cond_idx[m][0]]
+            one_cond = cond[norm_cond_idx[m][1]]
+            norm_hist_dict = normalize_hist_data(
+                hist_dict, zero_cond, one_cond)
+
+            # Plot histogram
+            col = m_idx * 2
+            curr_ax = axh[cond_idx][col]
+            plot_hist(
+                curr_ax, hist_dict, hist_col,
+                ax_label=[m, 'counts'],
+                norm_flag=False
+            )
+
+            # Plot errorbars
+            curr_ax = axh[cond_idx][col + 1]
+            bar_plot(curr_ax, norm_hist_dict, hist_col)
+
+
+    # Set up directory for saving results
+    home_dir = os.path.expanduser('~')
+    save_dir_base = os.path.join(
+        home_dir, 'results', 'el_ms', 'fig_4', 'flow_10D')
+    params_str = [
+        results_dict['subject'],
+        results_dict['dataset'],
+        'projMode_{}'.format(results_dict['params']['projection_mode']),
+        'nProj_{}'.format(results_dict['params']['n_proj']),
+        'nPerm_{}'.format(results_dict['params']['n_permute']),
+        'gridDelta_{}'.format(results_dict['params']['grid_delta']),
+        'gridNMin_{}'.format(results_dict['params']['grid_n_min'])
+    ]
+    params_str = '_'.join(params_str)
+    save_dir = os.path.join(save_dir_base, params_str)
+    os.makedirs(save_dir, exist_ok=True)
+
+    # Add analysis text to figure
+    # Set figure title
+    title_str = [
+        'Subject: {}'.format(results_dict['subject']),
+        'Dataset: {}'.format(results_dict['dataset']),
+        'Projection mode: {}'.format(results_dict['params']['projection_mode']),
+        'Grid spacing: {}'.format(results_dict['params']['grid_delta']),
+        'Grid min # overlap: {}'.format(results_dict['params']['grid_n_min'])
+    ]
+    fh.text(
+        0.01, 1 - 0.01,
+        '\n'.join(title_str),
+        fontsize=12,
+        horizontalalignment='left',
+        verticalalignment='top'
+    )
+
+    # Save figure
+    fig_str = [
+        'FlowComp',
+        results_dict['subject'],
+        results_dict['dataset'],
+        results_dict['params']['projection_mode'],
+        'hist'
+    ]
+    fig_str = '_'.join(fig_str) + '.pdf'
+    fig_name = os.path.join(save_dir, fig_str)
+    fh.savefig(fig_name)
+
+    return None
 
 
 """Old plotting code here
