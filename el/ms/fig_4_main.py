@@ -56,6 +56,7 @@ elif mode == 'remote':
 # Define subject and dataset
 subject = 'Earl'
 dataset = '20180927'
+
 use_multiproc = True
 pool_size = 8
 debug = False
