@@ -58,7 +58,7 @@ subject = 'Earl'
 dataset = '20180927'
 
 use_multiproc = True
-pool_size = 8
+pool_size = 16
 debug = False
 
 # Define parameter dictionary
