@@ -920,7 +920,8 @@ def plot_flow_results(subject, dataset, results, params):
         'Dataset: {}'.format(dataset),
         'Projection mode: {}'.format(params['projection_mode']),
         'Grid spacing: {}'.format(params['grid_delta']),
-        'Grid min # overlap: {}'.format(params['grid_n_min'])
+        'Grid min # overlap: {}'.format(params['grid_n_min']),
+        'Num projections: {}'.format(params['n_proj'])
     ]
     fh.text(
         0.01, 1 - 0.01,
@@ -1065,29 +1066,10 @@ def plot_flow_summary_hist(results_dict):
         """Create bar + whisker plot for flow data."""
 
         # Plot limits
-
         n_items = len(hist_dict.values())
-        axh.plot([0.5, n_items + 0.5], [0, 0], 'k--')
-        axh.plot([0.5, n_items + 0.5], [1, 1], 'k--')
-
-        '''
-        # Box plot
-        bplot = axh.boxplot(
-            hist_dict.values(),
-            notch=True,
-            whis=[2.5, 97.5],
-            bootstrap=1000,
-            labels=hist_dict.keys(),
-            patch_artist=True,  # Needed to fill with color
-            medianprops={'color': 'black'},
-            showfliers=False  # Don't show outliers
-        )
-
-        # Format plot -- set box colors
-        for p, c in zip(bplot['boxes'], col):
-            p.set_facecolor(c)
-            p.set_alpha(0.7)
-        '''
+        x_lim = [0.5, n_items + 0.5]
+        axh.plot(x_lim, [0, 0], 'k--')
+        axh.plot(x_lim, [1, 1], 'k--')
 
         # Plot mean and standard deviation
         labels = hist_dict.keys()
@@ -1097,8 +1079,12 @@ def plot_flow_summary_hist(results_dict):
             x += 1
             y_mean = d.mean()
             y_std = d.std()
-            curr_ax.errorbar(x, y_mean, yerr=y_std, color=c)
-            curr_ax.plot(x, y_mean, marker='o', color=c)
+            axh.errorbar(x, y_mean, yerr=y_std, color=c, capsize=5)
+            axh.plot(x, y_mean, marker='o', color=c)
+
+        axh.set_xticks(range(1, n_items+1))
+        axh.set_xlim(x_lim)
+        axh.set_xticklabels(labels)
 
         return None
 
@@ -1169,7 +1155,8 @@ def plot_flow_summary_hist(results_dict):
         'Dataset: {}'.format(results_dict['dataset']),
         'Projection mode: {}'.format(results_dict['params']['projection_mode']),
         'Grid spacing: {}'.format(results_dict['params']['grid_delta']),
-        'Grid min # overlap: {}'.format(results_dict['params']['grid_n_min'])
+        'Grid min # overlap: {}'.format(results_dict['params']['grid_n_min']),
+        'Num. projections: {}'.format(results_dict['params']['n_proj'])
     ]
     fh.text(
         0.01, 1 - 0.01,
