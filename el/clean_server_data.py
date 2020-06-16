@@ -73,8 +73,12 @@ def main():
 
 def clean_dataset_directory(dir, flags):
     """Clean dataset directory."""
-    translated_dir = os.path.join(dir, 'translated')
+    # Display status message
     print('\nCleaning directory: {}'.format(dir))
+
+    # Define path to translated directory and create if it does not exist
+    translated_dir = os.path.join(dir, 'translated')
+    os.makedirs(translated_dir, exist_ok=True)
 
     # First remove directories
     for rm_dir in flags['REMOVE_DIRS']:
