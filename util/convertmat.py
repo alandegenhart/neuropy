@@ -80,9 +80,9 @@ been converted/accessed.
 
 
 # Import modules
-import h5py
 import os
 import numpy as np
+import h5py
 
 
 def convert_mat(path):
