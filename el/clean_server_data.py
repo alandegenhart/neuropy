@@ -114,7 +114,7 @@ def remove_directory(dir, dry_run=False):
     """Remove directory and print message."""
     print('Removing: {}'.format(dir))
     if not dry_run:
-        shutil.rmtree(dir)
+        shutil.rmtree(dir, ignore_errors=True)
 
     return None
 
