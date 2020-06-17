@@ -7,10 +7,9 @@ import re
 import argparse
 
 # Custom modules
+import neuropy as neu
 home_dir = os.path.expanduser('~')
 src_dir = os.path.join(home_dir, 'src')
-sys.path.append(src_dir)
-import neuropy as neu
 
 
 def main():
