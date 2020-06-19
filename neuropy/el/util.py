@@ -40,7 +40,8 @@ class ExperimentLog:
             # Specify path to default energy landscape log. The default log
             # should exist in the same directory as this module.
             self.log_path = os.path.join(
-                src_dir, 'neuropy', 'el', 'EnergyLandscape_DatasetList.xlsx'
+                src_dir, 'neuropy', 'neuropy', 'el',
+                'EnergyLandscape_DatasetList.xlsx'
             )
         else:
             self.log_path = ''
@@ -68,8 +69,9 @@ class ExperimentLog:
 
         # Iterate over keys in criteria dict
         mask = pd.Series(np.full(self.log.shape[0], True))
-        for k, v in criteria:
+        for k, v in criteria.items():
             mask = mask & (self.log[k] == v)
+            # TODO: if multiple values are specified, check for each value
 
         # Apply filter to data. If the in_place flag is set to true, update the
         # data in the object, otherwise return the data frame with the filter
@@ -83,10 +85,13 @@ class ExperimentLog:
     def get_data_path(self, location, in_place=True):
         """Get data paths for datasets."""
 
-        # Define function to get the data path for a single row
         def data_path_row(row, base_path):
+            """Return path to data and a list of data files for a single entry
+            in the log DataFrame.
+            """
+
             # Get list of directories and convert to file name prefix
-            dir_num = range(row['dir_start'], row['dir_end'])
+            dir_num = range(row['dir_start'], row['dir_end'] + 1)
             dir_str_prefix = [
                 '{}{}_{:02d}_'.format(row['subject'], row['dataset'], dn)
                 for dn in dir_num
@@ -100,13 +105,34 @@ class ExperimentLog:
                     base_path, row['subject'], yr, mo, ds_str, 'translated'
             )
 
-            # Get list of files in the translated directory
-            _, _, translated_file_list = next(os.walk(translated_dir))
+            # Get list of files in the translated directory.
+            if os.path.isdir(translated_dir):
+                _, _, translated_dir_file_list = next(os.walk(translated_dir))
+            else:
+                # The desired directory didn't exist. Return None.
+                return None, None
+
+            # Filter out all files except those that end in _SI_translated.mat
+            expr = re.compile('_SI_translated.mat')
+            translated_file_list = [
+                tfl for tfl in translated_dir_file_list if expr.findall(tfl)
+            ]
+
+            # Note -- in some cases (particularly when running this locally on
+            # the data stored on the SSD), the 'SI_translated' files appear to
+            # have been re-named. As a fall-back, grab all files that end in
+            # '_SI.mat' if there are no files that end in '_SI_translated.mat'.
+            if translated_file_list == []:
+                expr = re.compile('_SI.mat')
+                translated_file_list = [
+                    tfl for tfl in translated_dir_file_list if expr.findall(tfl)
+                ]
 
             # Iterate over dataset string prefix
             file_list = []
             for dsp in dir_str_prefix:
-                # Define expression to check if file exists
+                # Define expression to check if file exists. To do this, look
+                # for files in the translated
                 expr = re.compile(dsp)
 
                 # Check to see if string is in any of the translated files
@@ -115,23 +141,100 @@ class ExperimentLog:
                         # Add to file list
                         file_list.append(os.path.splitext(tfl)[0])
 
-            dir_list = {
-                'dir_path': translated_dir,
-                'file_list': file_list
-            }
-
-            return dir_list
+            return translated_dir, file_list
 
         # Apply function to each row in the dataset
+        # TODO: Update to use the apply() method. This should be more efficient
         data_path_base = data_path(location)
-        ds_dir_list = self.log.apply(
-            data_path_row, axis=1, args=(data_path_base,)
-        )
+        #ds_dir_list = self.log.apply(
+        #    data_path_row, axis=1, args=(data_path_base,)
+        #)
+
+        # Iterate over rows -- this is inefficient, but is done for debugging
+        # purposes
+        ds_dir_path = []
+        ds_dir_list = []
+        for row in self.log.iterrows():
+            row_dir, row_files = data_path_row(row[1], data_path_base)
+            ds_dir_path.append(row_dir)
+            ds_dir_list.append(row_files)
 
         # Append paths to log
         if in_place:
-            self.log['path'] = ds_dir_list
+            self.log['dir_path'] = ds_dir_path
+            self.log['dir_list'] = ds_dir_list
             return None
         else:
-            return ds_dir_list
+            return ds_dir_path, ds_dir_list
+
+    def get_experiment_sets(self, task_list):
+        """Get set of files for an experiment.
+
+        This function returns a DataFrame where each row is a single experiment
+        consisting of a set of tasks.
+        """
+
+        # Find unique subject/dataset/condition combinations
+        unique_cols = ['subject', 'dataset', 'condition']
+        unique_datasets = self.log.drop_duplicates(unique_cols)[unique_cols]
+
+        # Initialize dict to hold experiments
+        experiment_sets = {
+            'subject': [],
+            'dataset': [],
+            'condition': [],
+            'dir_path': []
+        }
+        # Add fields for tasks
+        for task in task_list:
+            experiment_sets[task] = []
+
+        # Iterate over unique datasets and get files
+        for uds in unique_datasets.iterrows():
+            # Get entries in the full log for the current dataset
+            uds = uds[1]  # Don't care about the index
+
+            # Generate unique experiment mask. Explicitly generate masks for
+            # the unique columns.
+            subject_mask = self.log['subject'] == uds['subject']
+            dataset_mask = self.log['dataset'] == uds['dataset']
+            if uds['condition'] is np.nan:
+                # Note: nan != nan, so don't u
+                condition_mask = self.log['condition'].isna()
+            else:
+                condition_mask = self.log['condition'] == uds['condition']
+
+            mask = subject_mask & dataset_mask & condition_mask
+            dataset = self.log[mask]
+
+            # Iterate over tasks. If the task exists, get the directory list.
+            # Otherwise, set the corresponding value to None
+            for task in task_list:
+                # Get task directory list
+                task_mask = dataset['task'] == task
+                task_dir_list = list(dataset['dir_list'][task_mask].array)
+                if (len(task_dir_list) == 0) or task_dir_list == [[]]\
+                        or task_dir_list == [None]:
+                    task_dir_list = None
+
+                # Add to output dict
+                experiment_sets[task].append(task_dir_list)
+
+            # Add other information to the output dict
+            for uc in unique_cols:
+                experiment_sets[uc].append(uds[uc])
+
+            # Add the first 'dir_path' entry, as these should all be the same
+            # for a given dataset
+            experiment_sets['dir_path'].append(dataset['dir_path'].iloc[0])
+
+        # Convert experiment set dict to a pandas array and remove any columns
+        # where one of the two task directory lists is nan
+        experiment_sets = pd.DataFrame(experiment_sets)
+        mask = pd.Series([True] * experiment_sets.shape[0])
+        for task in task_list:
+            mask = mask & experiment_sets[task].notna()
+        experiment_sets = experiment_sets[mask]
+
+        return experiment_sets
 
