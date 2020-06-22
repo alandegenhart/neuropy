@@ -153,11 +153,12 @@ def convert_hdf5_dataset(file, dataset):
     if dataset.dtype is h5py.ref_dtype:
         # Iterate over elements in the dataset. In most cases this means that
         # data in a structure array is being accessed.
-        data_list = [convert_hdf5_value(file, file[ref]) 
-            for ref in dataset.value.flatten()
-            ]
+        data_list = [
+            convert_hdf5_value(file, file[ref])
+            for ref in dataset[()].flatten()
+        ]
     else:
-        data_list = dataset.value
+        data_list = dataset[()]
 
         # Handle special case where the list represents a string
         if dataset.attrs['MATLAB_class'].decode() == 'char':
