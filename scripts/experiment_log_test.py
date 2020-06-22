@@ -33,3 +33,5 @@ print(experiment_list)
 #   This might mean checking for the 'translated' and non-translated flats.
 # - Iterate to run flow analysis
 # - Move analysis results to NSPG
+# - Also need to update MATLAB export function to re-save ALL files in the
+#   'translated' directory.
