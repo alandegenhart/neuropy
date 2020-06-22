@@ -113,6 +113,7 @@ def main():
         convert_list = convert_list[0:n_rows]
 
     # Now convert files
+    if args.use_multiproc:
         with mp.Pool(processes=args.pool_size) as pool:
             pool.map(convert_file, convert_list)
     else:
