@@ -16,6 +16,22 @@ src_dir = os.path.join(home_dir, 'src')
 # - get colors
 
 
+def get_valid_criteria():
+    """Return criteria defining valid datasets."""
+    # TODO: perhaps this should be analysis-specific?
+    criteria = {
+        'subject': 'Earl',
+        'grid': 'targ_4',
+        'int_calib_method': 'center_out_udp',
+        'bins': 7,
+        'align_bins': 1,
+        'align': 'start',
+        'gpfa_int': 'grad_train',
+        'gpfa_rot': 'cond_4'
+    }
+    return criteria
+
+
 def data_path(location):
     """Return path to stored data."""
     location = location.lower()
@@ -138,8 +154,14 @@ class ExperimentLog:
                 # Check to see if string is in any of the translated files
                 for tfl in translated_file_list:
                     if expr.findall(tfl):
+                        # Remove 'translated' from the dir list if it exists
+                        file_name = os.path.splitext(tfl)[0]
+                        trans_str_idx = file_name.find('_translated')
+                        if trans_str_idx != -1:
+                            file_name = file_name[0:trans_str_idx]
+
                         # Add to file list
-                        file_list.append(os.path.splitext(tfl)[0])
+                        file_list.append(file_name)
 
             return translated_dir, file_list
 
