@@ -17,9 +17,7 @@ import neuropy as neu
 def main():
     """Main function for script."""
 
-    DEBUG = True
     SKIP_EXISTING = True
-    pool_size = 4
 
     # Parse optional arguments
     parser = argparse.ArgumentParser()
@@ -45,7 +43,7 @@ def main():
     print('Location: {}'.format(args.location))
     print('Dry run: {}'.format(args.dry_run))
     print('Use parallel processing: {}'.format(args.use_multiproc))
-    print('Parallel processing pool size: {}'.format(pool_size))
+    print('Parallel processing pool size: {}'.format(args.pool_size))
 
     # Get datasets to process. Convert all with the standard valid criteria.
     EL = neu.el.util.ExperimentLog()
@@ -115,7 +113,7 @@ def main():
         convert_list = convert_list[0:n_rows]
 
     # Now convert files
-        with mp.Pool(processes=pool_size) as pool:
+        with mp.Pool(processes=args.pool_size) as pool:
             pool.map(convert_file, convert_list)
     else:
         for file_info in convert_list:
