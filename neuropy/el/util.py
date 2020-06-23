@@ -5,11 +5,9 @@ import pandas as pd
 import os
 import re
 
-# Custom modules
+# Get directory paths
 home_dir = os.path.expanduser('~')
 src_dir = os.path.join(home_dir, 'src')
-#sys.path.append(src_dir)
-#import neuropy as neu
 
 # Functions to implement here:
 # - get paired targets
@@ -32,19 +30,22 @@ def get_valid_criteria():
     return criteria
 
 
-def data_path(location):
+def get_data_path(location):
     """Return path to stored data."""
     location = location.lower()
     if location == 'yu':
-        path = '/afs/ece.cmu.edu/project/nspg/data/batista/el/Animals'
+        data_loc = '/afs/ece.cmu.edu/project/nspg/data/batista/el/Animals'
+        results_loc = '/afs/ece.cmu.edu/project/nspg/adegenha/results'
     elif location == 'batista':
-        path = ''  # Not currently set up
+        data_loc = ''  # Not currently set up
+        results_loc = ''
     elif location == 'ssd':
-        path = '/Volumes/Samsung_T5/Batista/Animals'
+        data_loc = '/Volumes/Samsung_T5/Batista/Animals'
+        results_loc = '/Users/alandegenhart/results'
     else:
         raise NameError('Invalid data location specified.')
 
-    return path
+    return data_loc, results_loc
 
 
 class ExperimentLog:
@@ -167,7 +168,7 @@ class ExperimentLog:
 
         # Apply function to each row in the dataset
         # TODO: Update to use the apply() method. This should be more efficient
-        data_path_base = data_path(location)
+        data_path_base, _ = get_data_path(location)
         #ds_dir_list = self.log.apply(
         #    data_path_row, axis=1, args=(data_path_base,)
         #)
