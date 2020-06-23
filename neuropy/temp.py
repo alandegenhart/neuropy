@@ -75,11 +75,11 @@ def define_color_map():
         'T5T1': {'dark': '#0080b3', 'light': '#8fbbcc'},
         'T2T6': {'dark': '#06a600', 'light': '#91cc8f'},
         'T6T2': {'dark': '#9b00d9', 'light': '#c698d9'},
-        'T3T7': {'dark': '#c80', 'light': '#ccb88f'},
-        'T7T3': {'dark': '#04c', 'light': '#8fa3cc'},
-        'T4T8': {'dark': '#7c0', 'light': '#b3cc8f'},
-        'T8T4': {'dark': '#c06', 'light': '#cc8fad'}
-    }
+        'T3T7': {'dark': '#cc8800', 'light': '#ccb88f'},
+        'T7T3': {'dark': '#0044cc', 'light': '#8fa3cc'},
+        'T4T8': {'dark': '#77cc00', 'light': '#b3cc8f'},
+        'T8T4': {'dark': '#cc0066', 'light': '#cc8fad'}
+    }#cc8800
     
     return col_map
 
