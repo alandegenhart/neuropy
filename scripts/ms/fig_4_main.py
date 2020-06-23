@@ -166,7 +166,7 @@ def main_fun(analysis_dict):
     # Run flow analysis, create results plots
     try:
         results, flow_ex, comp_cond = f4.flow_analysis(
-            params, data_dir, tt_int, tt_rot
+            params, data_dir, tt_int, tt_rot, verbose=False
         )
         f4.plot_flow_ex(
             subject, dataset, flow_ex, comp_cond, params, results_dir_path

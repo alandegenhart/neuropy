@@ -34,7 +34,7 @@ def define_param_sets(params):
     return param_sets
 
 
-def flow_analysis(params, data_dir, int_file, rot_file):
+def flow_analysis(params, data_dir, int_file, rot_file, verbose=True):
     """10D flow analysis.
 
     """
@@ -66,9 +66,10 @@ def flow_analysis(params, data_dir, int_file, rot_file):
     neu.el.proc.clean_bci_params(dec_rot)
 
     # Define paths to GPFA data
+    # TODO: update this to use actual decoder number?
     gpfa_results_dir = os.path.join(data_dir, 'analysis', 'mat_results')
     int_dec_num = 5  # Need to re-convert data to get this from the params
-    rot_dec_num = 10 # Need to re-convert data to get this from the params
+    rot_dec_num = 10  # Need to re-convert data to get this from the params
     int_gpfa_path = os.path.join(
         gpfa_results_dir,
         'run{:03d}'.format(int_dec_num),
@@ -213,7 +214,8 @@ def flow_analysis(params, data_dir, int_file, rot_file):
     }  # Example flow fields for a single projection/permutation
     for proj in range(params['n_proj']):
         # Display status
-        print('Projection: {} of {}'.format(proj + 1, params['n_proj']))
+        if verbose:
+            print('Projection: {} of {}'.format(proj + 1, params['n_proj']))
 
         # Define projection
         if params['projection_mode'] == 'orth':
