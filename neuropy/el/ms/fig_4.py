@@ -34,26 +34,16 @@ def define_param_sets(params):
     return param_sets
 
 
-def flow_analysis(subject, dataset, params, base_dir):
+def flow_analysis(params, data_dir, int_file, rot_file):
     """10D flow analysis.
 
     """
 
     """Step 1: Load data, decoding, and GPFA parameters."""
-
-    # Define data paths
-    data_dir = os.path.join(
-        base_dir, subject, dataset[0:4], dataset[4:6], dataset
-    )
-    save_dir = os.path.join(data_dir, 'translated', 'pandasData')
-    dataset_name = [
-        'Earl20180927_04_condGridTask_01_SI_exportData.hdf',
-        'Earl20180927_05_twoTargetABBA_rotated_01_SI_exportData.hdf'
-    ]
-
     # Load data
-    df_int = pd.read_hdf(os.path.join(save_dir, dataset_name[0]), 'df')
-    df_rot = pd.read_hdf(os.path.join(save_dir, dataset_name[1]), 'df')
+    pandas_dir = os.path.join(data_dir, 'pandasData')
+    df_int = pd.read_hdf(os.path.join(pandas_dir, int_file), 'df')
+    df_rot = pd.read_hdf(os.path.join(pandas_dir, rot_file), 'df')
 
     # Drop unused columns to save space
     drop_cols = [
@@ -64,10 +54,10 @@ def flow_analysis(subject, dataset, params, base_dir):
     df_rot.drop(columns=drop_cols, inplace=True)
 
     # Get decoder names
-    int_dec_path = os.path.join(data_dir,
-                                df_int['decoderName'].iloc[0] + '.mat')
-    rot_dec_path = os.path.join(data_dir,
-                                df_rot['decoderName'].iloc[0] + '.mat')
+    int_dec_path = os.path.join(
+        data_dir, df_int['decoderName'].iloc[0] + '.mat')
+    rot_dec_path = os.path.join(
+        data_dir, df_rot['decoderName'].iloc[0] + '.mat')
 
     # Load decoding parameters and GPFA results
     dec_int = neu.util.convertmat.convert_mat(int_dec_path)['bci_params']
@@ -507,19 +497,10 @@ def define_comparison_conditions(targ_cond, tcu):
     return comp_cond
 
 
-def plot_flow_ex(subject, dataset, flow_ex, comp_cond, params):
-    """Create example flow field plots."""
-
-    import copy
-
-    # Plotting constants
-    hist_bar_width = {'flow': 0.5, 'overlap': 1}
-
+def get_results_dir(subject, dataset, params, base_dir, create_dir=True):
+    """Convert parameters to name string and get save directory."""
     # Set up directory for saving results
-    home_dir = os.path.expanduser('~')
-    save_dir_base = os.path.join(
-        home_dir, 'results', 'el_ms', 'fig_4', 'flow_10D')
-    params_str = [
+    params_list = [
         subject,
         dataset,
         'projMode_{}'.format(params['projection_mode']),
@@ -528,9 +509,49 @@ def plot_flow_ex(subject, dataset, flow_ex, comp_cond, params):
         'gridDelta_{}'.format(params['grid_delta']),
         'gridNMin_{}'.format(params['grid_n_min'])
     ]
-    params_str = '_'.join(params_str)
-    save_dir = os.path.join(save_dir_base, params_str)
-    os.makedirs(save_dir, exist_ok=True)
+    params_str = '_'.join(params_list)
+    save_dir = os.path.join(base_dir, params_str)
+
+    # Create directory if desired
+    if create_dir:
+        os.makedirs(save_dir, exist_ok=True)
+
+    return save_dir, params_str
+
+
+def save_results(results, file_name_str, save_dir):
+    """Save projection results to disk."""
+
+    import pickle
+
+    # Define save path and write to disk
+    save_file = os.path.join(save_dir, '{}.pickle'.format(file_name_str))
+    file = open(save_file, 'wb')
+    pickle.dump(results, file)
+    file.close()
+
+    return None
+
+
+def load_results(file_path):
+    """Load saved results from disk."""
+
+    import pickle
+
+    file = open(file_path, 'rb')
+    results = pickle.load(file)
+    file.close()
+
+    return results
+
+
+def plot_flow_ex(subject, dataset, flow_ex, comp_cond, params, save_dir):
+    """Create example flow field plots."""
+
+    import copy
+
+    # Plotting constants
+    hist_bar_width = {'flow': 0.5, 'overlap': 1}
 
     # Define colormap (used for plotting)
     col_map = tmp.define_color_map()
@@ -813,7 +834,7 @@ def plot_flow_ex(subject, dataset, flow_ex, comp_cond, params):
     return None
 
 
-def plot_flow_results(subject, dataset, results, params):
+def plot_flow_results(subject, dataset, results, params, save_dir):
     """Plot summary of flow field comparisons."""
 
     def plot_scatter(axh, x, y, color, ax_label,
@@ -896,23 +917,6 @@ def plot_flow_results(subject, dataset, results, params):
                 axis_labels
             )
 
-    # Set up directory for saving results
-    home_dir = os.path.expanduser('~')
-    save_dir_base = os.path.join(
-        home_dir, 'results', 'el_ms', 'fig_4', 'flow_10D')
-    params_str = [
-        subject,
-        dataset,
-        'projMode_{}'.format(params['projection_mode']),
-        'nProj_{}'.format(params['n_proj']),
-        'nPerm_{}'.format(params['n_permute']),
-        'gridDelta_{}'.format(params['grid_delta']),
-        'gridNMin_{}'.format(params['grid_n_min'])
-    ]
-    params_str = '_'.join(params_str)
-    save_dir = os.path.join(save_dir_base, params_str)
-    os.makedirs(save_dir, exist_ok=True)
-
     # Add analysis text to figure
     # Set figure title
     title_str = [
@@ -946,59 +950,7 @@ def plot_flow_results(subject, dataset, results, params):
     return None
 
 
-def params_to_name(subject, dataset, params):
-    """Convert parameters to name string and get save directory."""
-    # Set up directory for saving results
-    home_dir = os.path.expanduser('~')
-    save_dir_base = os.path.join(
-        home_dir, 'results', 'el_ms', 'fig_4', 'flow_10D')
-    params_str = [
-        subject,
-        dataset,
-        'projMode_{}'.format(params['projection_mode']),
-        'nProj_{}'.format(params['n_proj']),
-        'nPerm_{}'.format(params['n_permute']),
-        'gridDelta_{}'.format(params['grid_delta']),
-        'gridNMin_{}'.format(params['grid_n_min'])
-    ]
-    params_str = '_'.join(params_str)
-    save_dir = os.path.join(save_dir_base, params_str)
-    os.makedirs(save_dir, exist_ok=True)
-
-    return save_dir, params_str
-
-
-def save_results(results):
-    """Save projection results to disk."""
-
-    import pickle
-
-    # Define save path
-    save_dir, params_str = params_to_name(
-        results['subject'], results['dataset'], results['params'])
-    save_file = os.path.join(save_dir, '{}.pickle'.format(params_str))
-
-    # Write to disk
-    file = open(save_file, 'wb')
-    pickle.dump(results, file)
-    file.close()
-
-    return None
-
-
-def load_results(file_path):
-    """Load saved results from disk."""
-
-    import pickle
-
-    file = open(file_path, 'rb')
-    results = pickle.load(file)
-    file.close()
-
-    return results
-
-
-def plot_flow_summary_hist(results_dict):
+def plot_flow_summary_hist(results_dict, save_dir):
     """Plot summary of flow field comparisons."""
 
     def plot_hist(axh, hist_dict, col,
@@ -1129,24 +1081,6 @@ def plot_flow_summary_hist(results_dict):
             # Plot errorbars
             curr_ax = axh[cond_idx][col + 1]
             bar_plot(curr_ax, norm_hist_dict, hist_col)
-
-
-    # Set up directory for saving results
-    home_dir = os.path.expanduser('~')
-    save_dir_base = os.path.join(
-        home_dir, 'results', 'el_ms', 'fig_4', 'flow_10D')
-    params_str = [
-        results_dict['subject'],
-        results_dict['dataset'],
-        'projMode_{}'.format(results_dict['params']['projection_mode']),
-        'nProj_{}'.format(results_dict['params']['n_proj']),
-        'nPerm_{}'.format(results_dict['params']['n_permute']),
-        'gridDelta_{}'.format(results_dict['params']['grid_delta']),
-        'gridNMin_{}'.format(results_dict['params']['grid_n_min'])
-    ]
-    params_str = '_'.join(params_str)
-    save_dir = os.path.join(save_dir_base, params_str)
-    os.makedirs(save_dir, exist_ok=True)
 
     # Add analysis text to figure
     # Set figure title
