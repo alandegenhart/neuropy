@@ -4,41 +4,64 @@
 import os
 import pathlib
 import sys
-import fig_4_module as f4
 
-%reload_ext autoreload
-%autoreload 2
-
-# %% Setup data paths and load data
-
-# Define path to data
-results_dir = 'Earl_20180927_projMode_random_nProj_500_nPerm_100_gridDelta_1_gridNMin_1'
-results_dir = 'Earl_20180927_projMode_random_nProj_500_nPerm_100_gridDelta_2_gridNMin_2'
-results_file = '{}.pickle'.format(results_dir)
+# Define directory paths and import modules
 home_dir = os.path.expanduser('~')
-results_dir_base = os.path.join(home_dir, 'results', 'el_ms', 'fig_4', 'flow_10D')
-results_path = os.path.join(results_dir_base, results_dir, results_file)
+src_dir = os.path.join(home_dir, 'src', 'neuropy')
+sys.path.append(src_dir)
+import neuropy as neu
+import neuropy.el.ms.fig_4 as f4
 
-# Load data
-results_dict = f4.load_results(results_path)
 
-# %% Get list of directories
+def main():
+    # Arguments
+    location = 'ssd'
+    create_hist_plots = True
 
-# Get iterator for items in directory
-dirs = os.scandir(results_dir_base)
-for d in dirs:
-    # Check to see if the item is a directory
-    if not d.is_dir():
-        continue
+    # Define path to results
+    dir_name = 'Flow10D_projMode_random_nProj_500_nPerm_100_gridDelta_2_gridNMin_2'
+    _, results_path = neu.el.util.get_data_path(location)
+    results_path = os.path.join(results_path, 'el_ms', 'fig_4', 'flow_10D')
+    results_dir_base = os.path.join(results_path, dir_name)
 
-    # Define path to pickle data and check to see if it exists
-    f_name = '{}.pickle'.format(d.name)
-    file_path = os.path.join(results_dir_base, d.name, f_name)
-    P = pathlib.Path(file_path)
-    if not P.exists():
-        continue
-        
-    # Load results data and analyze
-    results_dict = f4.load_results(file_path)
-    f4.plot_flow_summary_hist(results_dict)
-    
+    # Check to make sure directory exists
+    if not os.path.isdir(results_dir_base):
+        Exception('Results directory does not exist.')
+
+    # Create directory for results
+    hist_results_dir = os.path.join(results_dir_base, 'hist_results')
+    os.makedirs(hist_results_dir, exist_ok=True)
+
+    # Get iterator for items in directory
+    hist_summary_data = []
+    _, dirs, _ = next(os.walk(results_dir_base))
+    for d in dirs:
+        # Define path to pickle data and check to see if it exists
+        f_name = '{}.pickle'.format(d)
+        results_dir = os.path.join(results_dir_base, d)
+        file_path = os.path.join(results_dir, f_name)
+        if not os.path.isfile(file_path):
+            continue
+
+        # Load results data and get summary data
+        results_dict = f4.load_results(file_path)
+        summary_data = f4.get_flow_summary_data(results_dict)
+
+        # Plot summary histogram for dataset
+        if create_hist_plots:
+            print('Plotting flow summary: {}'.format(d))
+            f4.plot_flow_summary_hist(summary_data, hist_results_dir)
+
+        # Add average normalized data to list
+        hist_summary_data.append(summary_data['norm_data_mean'])
+
+    # Plot summary across experiments
+    # TODO: finish implementing this
+    # TODO: verify that plotting function still returns the same results
+    f4.plot_hist_summary(hist_summary_data, hist_results_dir)
+
+    return None
+
+
+if __name__ == '__main__':
+    main()
