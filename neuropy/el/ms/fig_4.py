@@ -952,21 +952,99 @@ def plot_flow_results(subject, dataset, results, params, save_dir):
     return None
 
 
-def plot_flow_summary_hist(results_dict, save_dir):
+def get_flow_summary_data(results_dict):
     """Plot summary of flow field comparisons."""
 
-    def plot_hist(axh, hist_dict, col,
+    def normalize_hist_data(hist_data, idx):
+        """Normalize histogram data.
+
+        To normalize, we subtract the zero condition and divide by the one
+        condition.
+        :hist_data -- list of arrays
+        :idx -- 2-element list of indices corresponding to the '0' condition
+        and the '1' condition
+        """
+        z = np.mean(hist_data[idx[0]])
+        o = np.mean(hist_data[idx[1]] - z)
+        norm_hist_data = [
+            (hd - z) / o
+            for hd in hist_data
+        ]
+        return norm_hist_data
+
+    # Set up comparisons
+    hist_cond = [
+        ['int_vs_rot', 'int_vs_int', 'int_vs_int_alt', 'int_vs_int_rev'],
+        ['int_vs_rot', 'rot_vs_rot', 'rot_vs_rot_alt', 'rot_vs_rot_rev']
+    ]
+    flow_metrics = ['flow_diff', 'n_overlap']
+    norm_cond_idx = {
+        'flow_diff': [1, 3],
+        'n_overlap': [2, 1]
+    }
+
+    # Iterate over metrics
+    data = {}
+    norm_data = {}
+    norm_data_mean = {}
+    for m_idx, m in enumerate(flow_metrics):
+        metric_data = []
+        norm_metric_data = []
+        norm_metric_data_mean = []
+        # Iterate over condition sets (reference distributions)
+        for cond_idx, cond in enumerate(hist_cond):
+            # Get data for set of conditions (use list comprehension)
+            cond_data = [
+                np.array(results_dict['proj_results'][m][c]).reshape((-1,))
+                for c in cond
+            ]
+            # Normalize
+            norm_cond_data = normalize_hist_data(cond_data, norm_cond_idx[m])
+            # Get mean of normalized data
+            norm_cond_mean = [
+                np.mean(ncd) for ncd in norm_cond_data
+            ]
+            # Add to arrays
+            metric_data.append(cond_data)
+            norm_metric_data.append(norm_cond_data)
+            norm_metric_data_mean.append(norm_cond_mean)
+
+        # Add metric data to overall data dicts
+        data[m] = metric_data
+        norm_data[m] = norm_metric_data
+        norm_data_mean[m] = norm_metric_data_mean
+
+    # Put all results in a single output dict
+    summary_data = {
+        'subject': results_dict['subject'],
+        'dataset': results_dict['dataset'],
+        'condition': [],  # TODO: replace this once dataset conditions are added
+        'params': results_dict['params'],
+        'cond': hist_cond,
+        'metrics': flow_metrics,
+        'data': data,
+        'norm_data': norm_data,
+        'norm_data_mean': norm_data_mean
+    }
+
+    return summary_data
+
+
+def plot_flow_summary_hist(summary_data, save_dir):
+    """Plot summary of flow field comparisons."""
+
+    def plot_hist(axh, data, labels, col,
                   bins=20, ax_label=['data', 'counts'], n_axis_ticks=3,
                   norm_flag=True, density_flag=False):
         """Histogram plot with options"""
 
         axh.hist(
-            hist_dict.values(),
+            data,
             bins=bins,
             histtype='stepfilled',
             alpha=0.65,
             density=density_flag,
-            label=hist_dict.keys(),
+            label=labels,
             color=col)
 
         # Set axis ticks
@@ -990,33 +1068,7 @@ def plot_flow_summary_hist(results_dict, save_dir):
 
         return None
 
-    def normalize_hist_data(hist_dict, zero_cond, one_cond):
-        """Normalize histogram data.
-
-        To normalize, we subtract the zero condition and divide by the one
-        condition.
-        """
-        z = np.mean(hist_dict[zero_cond])
-        o = np.mean(hist_dict[one_cond] - z)
-        hist_dict_norm = {
-            k: (data - z) / o
-            for k, data in hist_dict.items()
-        }
-
-        return hist_dict_norm
-
-    # Set up comparisons
-    hist_cond = [
-        ['int_vs_rot', 'int_vs_int', 'int_vs_int_alt', 'int_vs_int_rev'],
-        ['int_vs_rot', 'rot_vs_rot', 'rot_vs_rot_alt', 'rot_vs_rot_rev']
-    ]
-    flow_metrics = ['flow_diff', 'n_overlap']
-    norm_cond_idx = {
-        'flow_diff': [1, 3],
-        'n_overlap': [2, 1]
-    }
-
-    def bar_plot(axh, hist_dict, col):
+    def bar_plot(axh, data, labels, col):
         """Create bar + whisker plot for flow data."""
 
         # Plot limits
@@ -1026,8 +1078,6 @@ def plot_flow_summary_hist(results_dict, save_dir):
         axh.plot(x_lim, [1, 1], 'k--')
 
         # Plot mean and standard deviation
-        labels = hist_dict.keys()
-        data = hist_dict.values()
         x = 0
         for l, d, c in zip(labels, data, col):
             x += 1
@@ -1044,7 +1094,9 @@ def plot_flow_summary_hist(results_dict, save_dir):
 
     # Setup figure
     fh, axh = tmp.subplot_fixed(
-        len(hist_cond), len(flow_metrics) * 2, [400, 300],
+        len(summary_data['cond']),
+        len(summary_data['metrics']) * 2,
+        [400, 300],
         x_margin=[200, 200],
         y_margin=[200, 200]
     )
@@ -1058,41 +1110,38 @@ def plot_flow_summary_hist(results_dict, save_dir):
     ]
 
     # Iterate over rows/hist cond
+    hist_cond = summary_data['cond']
+    flow_metrics = summary_data['metrics']
     for cond_idx, cond in enumerate(hist_cond):
+        cond_labels = summary_data['cond'][cond_idx]
         # Iterate over metrics
         for m_idx, m in enumerate(flow_metrics):
             # Get histogram data
-            hist_dict = {
-                c: np.array(results_dict['proj_results'][m][c]).reshape((-1,))
-                for c in cond
-            }
-            zero_cond = cond[norm_cond_idx[m][0]]
-            one_cond = cond[norm_cond_idx[m][1]]
-            norm_hist_dict = normalize_hist_data(
-                hist_dict, zero_cond, one_cond)
+            hist_data = summary_data['data'][m][cond_idx]
+            norm_hist_data = summary_data['norm_data'][m][cond_idx]
 
             # Plot histogram
             col = m_idx * 2
             curr_ax = axh[cond_idx][col]
             plot_hist(
-                curr_ax, hist_dict, hist_col,
+                curr_ax, hist_data, cond_labels, hist_col,
                 ax_label=[m, 'counts'],
                 norm_flag=False
             )
 
             # Plot errorbars
             curr_ax = axh[cond_idx][col + 1]
-            bar_plot(curr_ax, norm_hist_dict, hist_col)
+            bar_plot(curr_ax, norm_hist_data, cond_labels, hist_col)
 
     # Add analysis text to figure
     # Set figure title
     title_str = [
-        'Subject: {}'.format(results_dict['subject']),
-        'Dataset: {}'.format(results_dict['dataset']),
-        'Projection mode: {}'.format(results_dict['params']['projection_mode']),
-        'Grid spacing: {}'.format(results_dict['params']['grid_delta']),
-        'Grid min # overlap: {}'.format(results_dict['params']['grid_n_min']),
-        'Num. projections: {}'.format(results_dict['params']['n_proj'])
+        'Subject: {}'.format(summary_data['subject']),
+        'Dataset: {}'.format(summary_data['dataset']),
+        'Projection mode: {}'.format(summary_data['params']['projection_mode']),
+        'Grid spacing: {}'.format(summary_data['params']['grid_delta']),
+        'Grid min # overlap: {}'.format(summary_data['params']['grid_n_min']),
+        'Num. projections: {}'.format(summary_data['params']['n_proj'])
     ]
     fh.text(
         0.01, 1 - 0.01,
@@ -1105,14 +1154,33 @@ def plot_flow_summary_hist(results_dict, save_dir):
     # Save figure
     fig_str = [
         'FlowComp',
-        results_dict['subject'],
-        results_dict['dataset'],
-        results_dict['params']['projection_mode'],
+        summary_data['subject'],
+        summary_data['dataset'],
+        summary_data['params']['projection_mode'],
         'hist'
     ]
     fig_str = '_'.join(fig_str) + '.pdf'
     fig_name = os.path.join(save_dir, fig_str)
     fh.savefig(fig_name)
+
+    return hist_dict
+
+
+def plot_hist_summary(summary_data, save_path):
+    """Plot flow summary across experiments."""
+    # Here, we want to create 4 different histograms -- 2 for the flow overlap
+    # metric, and 2 for the voxel overlap metric. For each metric, plot the
+    # histogram for both reference distributions (int vs int and rot vs rot).
+
+    # First get data for histograms
+    metrics = summary_data['metrics']
+    conditions = summary_data['conditions']
+    for c_idx, c in enumerate(conditions):
+        for m_idx, m in enumerate(metrics):
+            # Find mean across experiments
+            pass
+
+    # Plot here
 
     return None
 
