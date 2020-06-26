@@ -16,7 +16,7 @@ import neuropy.el.ms.fig_4 as f4
 def main():
     # Arguments
     location = 'ssd'
-    create_hist_plots = True
+    create_hist_plots = False
 
     # Define path to results
     dir_name = 'Flow10D_projMode_random_nProj_500_nPerm_100_gridDelta_2_gridNMin_2'
@@ -56,9 +56,19 @@ def main():
         hist_summary_data.append(summary_data['norm_data_mean'])
 
     # Plot summary across experiments
-    # TODO: finish implementing this
-    # TODO: verify that plotting function still returns the same results
-    f4.plot_hist_summary(hist_summary_data, hist_results_dir)
+    conditions = summary_data['cond']
+    title_str = [
+        'Flow analysis summary',
+        'Projection mode: {}'.format(summary_data['params']['projection_mode']),
+        'Grid spacing: {}'.format(summary_data['params']['grid_delta']),
+        'Grid min # overlap: {}'.format(summary_data['params']['grid_n_min']),
+        'Num. projections: {}'.format(summary_data['params']['n_proj']),
+        'Num. experiments: {}'.format(len(hist_summary_data))
+    ]
+    title_str = '\n'.join(title_str)
+    f4.plot_hist_summary(
+        hist_summary_data, conditions, hist_results_dir, title_str=title_str
+    )
 
     return None
 

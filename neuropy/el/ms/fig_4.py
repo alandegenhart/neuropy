@@ -1033,65 +1033,6 @@ def get_flow_summary_data(results_dict):
 def plot_flow_summary_hist(summary_data, save_dir):
     """Plot summary of flow field comparisons."""
 
-    def plot_hist(axh, data, labels, col,
-                  bins=20, ax_label=['data', 'counts'], n_axis_ticks=3,
-                  norm_flag=True, density_flag=False):
-        """Histogram plot with options"""
-
-        axh.hist(
-            data,
-            bins=bins,
-            histtype='stepfilled',
-            alpha=0.65,
-            density=density_flag,
-            label=labels,
-            color=col)
-
-        # Set axis ticks
-        x_lim = axh.get_xlim()
-        if norm_flag:
-            x_tick = np.array([0, 1])
-        else:
-            x_tick = np.linspace(
-                x_lim[0], x_lim[1], n_axis_ticks)
-
-        y_lim = axh.get_ylim()
-        y_tick = np.linspace(
-            np.ceil(y_lim[0]), np.floor(y_lim[1]), n_axis_ticks)
-        axh.set_xticks(x_tick)
-        axh.set_yticks(y_tick)
-
-        # Format plot
-        axh.legend()
-        axh.set_xlabel(ax_label[0])
-        axh.set_ylabel(ax_label[1])
-
-        return None
-
-    def bar_plot(axh, data, labels, col):
-        """Create bar + whisker plot for flow data."""
-
-        # Plot limits
-        n_items = len(hist_dict.values())
-        x_lim = [0.5, n_items + 0.5]
-        axh.plot(x_lim, [0, 0], 'k--')
-        axh.plot(x_lim, [1, 1], 'k--')
-
-        # Plot mean and standard deviation
-        x = 0
-        for l, d, c in zip(labels, data, col):
-            x += 1
-            y_mean = d.mean()
-            y_std = d.std()
-            axh.errorbar(x, y_mean, yerr=y_std, color=c, capsize=5)
-            axh.plot(x, y_mean, marker='o', color=c)
-
-        axh.set_xticks(range(1, n_items+1))
-        axh.set_xlim(x_lim)
-        axh.set_xticklabels(labels)
-
-        return None
-
     # Setup figure
     fh, axh = tmp.subplot_fixed(
         len(summary_data['cond']),
@@ -1163,94 +1104,149 @@ def plot_flow_summary_hist(summary_data, save_dir):
     fig_name = os.path.join(save_dir, fig_str)
     fh.savefig(fig_name)
 
-    return hist_dict
+    return None
 
 
-def plot_hist_summary(summary_data, save_path):
+def plot_hist_summary(data, conditions, save_path, title_str=''):
     """Plot flow summary across experiments."""
     # Here, we want to create 4 different histograms -- 2 for the flow overlap
     # metric, and 2 for the voxel overlap metric. For each metric, plot the
     # histogram for both reference distributions (int vs int and rot vs rot).
 
-    # First get data for histograms
-    metrics = summary_data['metrics']
-    conditions = summary_data['conditions']
-    for c_idx, c in enumerate(conditions):
-        for m_idx, m in enumerate(metrics):
-            # Find mean across experiments
-            pass
+    # Re-structure data. The input data is a list of dict, where the elements in
+    # the dict contain mean values for a particular metric (e.g., overlap) for
+    # a single dataset. Restructure this such that the top-level container is a
+    # dict, the elements of which contain results for all experiments.
+    metrics = data[0].keys()
+    data_dict = {
+        k: [
+            {c: [] for c in cond_set}
+            for cond_set in conditions
+        ]
+        for k in metrics
+    }
+    # Iterate over experiments
+    for d in data:
+        # Iterate over metrics
+        for k, vals in d.items():
+            # Iterate over condition sets
+            for idx, cv_set in enumerate(zip(conditions, vals)):
+                # Iterate over elements in the condition set
+                for c, v in zip(cv_set[0], cv_set[1]):
+                    data_dict[k][idx][c].append(v)
 
-    # Plot here
+    # Define colors
+    hist_col = [
+        'xkcd:emerald green',
+        'xkcd:ocean blue',
+        'xkcd:gold',
+        'xkcd:dark red'
+    ]
+    # Setup figure
+    fh, axh = tmp.subplot_fixed(
+        len(conditions),
+        len(metrics),
+        [400, 300],
+        x_margin=[200, 200],
+        y_margin=[200, 200]
+    )
+
+    # Iterate over metrics
+    cond_set_labels = ['intuitive', 'rotated']
+    for col, m in enumerate(metrics):
+        # Iterate over condition sets
+        for row, c_set in enumerate(conditions):
+            c_data = data_dict[m][row]  # Dict of lists for each condition
+            # Plot histograms
+            ax_label = [
+                m + ' (normalized)',
+                'experiments\n(reference dist: {})'.format(cond_set_labels[row])
+            ]
+            plot_hist(
+                axh[row][col],
+                c_data.values(),
+                c_set,
+                hist_col,
+                norm_flag=True,
+                density_flag=False,
+                ax_label=ax_label
+            )
+
+    # Add parameter string to figure
+    fh.text(
+        0.01, 1 - 0.01,
+        title_str,
+        fontsize=12,
+        horizontalalignment='left',
+        verticalalignment='top'
+    )
+
+    # Save
+    results_dir_path, _ = os.path.split(save_path)  # Hist results
+    _, fig_str = os.path.split(results_dir_path)  # Name of results dir
+    fig_str = fig_str + '_ExperimentSummary.pdf'
+    fig_name = os.path.join(save_path, fig_str)
+    fh.savefig(fig_name)
 
     return None
 
 
-"""Old plotting code here
+def plot_hist(axh, data, labels, col,
+              bins=20, ax_label=('data', 'counts'), n_axis_ticks=3,
+              norm_flag=True, density_flag=False):
+    """Histogram plot with options"""
 
-# Plot median values
-    y_lim = curr_ax.get_ylim()
-    curr_ax.plot(
-        np.median(np.concatenate(diff_int_all)) * np.ones((2, )),
-        y_lim,
-        linestyle='--',
-        color=line_col['int']
-    )
-    curr_ax.plot(
-        np.median(np.concatenate(diff_rot_all)) * np.ones((2, )),
-        y_lim,
-        linestyle='--',
-        color=line_col['rot']
-    )
-    curr_ax.plot(
-        np.median(np.concatenate(diff_introt_all)) * np.ones((2, )),
-        y_lim,
-        linestyle='--',
-        color=line_col['introt']
-    )
+    axh.hist(
+        data,
+        bins=bins,
+        histtype='stepfilled',
+        alpha=0.65,
+        density=density_flag,
+        label=labels,
+        color=col)
+
+    # Set axis ticks
+    x_lim = axh.get_xlim()
+    if norm_flag:
+        x_tick = np.array([0, 1])
+    else:
+        x_tick = np.linspace(
+            x_lim[0], x_lim[1], n_axis_ticks)
+
+    y_lim = axh.get_ylim()
+    y_tick = np.linspace(
+        np.ceil(y_lim[0]), np.floor(y_lim[1]), n_axis_ticks)
+    axh.set_xticks(x_tick)
+    axh.set_yticks(y_tick)
 
     # Format plot
-    curr_ax.legend()
-    curr_ax.set_xlabel('Flow difference magnitude')
-    curr_ax.set_ylabel('Density')
+    axh.legend()
+    axh.set_xlabel(ax_label[0])
+    axh.set_ylabel(ax_label[1])
 
-    # --- Subplot 5: median + CI ---
-    curr_ax = axh[row][4]
+    return None
 
-    # Create box plots using the built-in matplotlib function
-    bplot = curr_ax.boxplot(
-        hist_data,
-        notch=True,
-        whis=[2.5, 97.5],
-        bootstrap=1000,
-        labels=hist_labels,
-        patch_artist=True,  # Needed to fill with color
-        medianprops={'color':'black'},
-        showfliers=False  # Don't show outliers
-    )
 
-    # Format plot -- set box colors
-    for p, c in zip(bplot['boxes'], line_col.values()):
-        p.set_facecolor(c)
-        p.set_alpha(0.7)
+def bar_plot(axh, data, labels, col):
+    """Create bar + whisker plot for flow data."""
 
-    curr_ax.set_ylabel('Flow difference magnitude')
-    title_str = [
-        'Int vs IntRot: p = {:1.3e}'.format(stats_int_introt.pvalue),
-        'Rot vs IntRot: p = {:1.3e}'.format(stats_rot_introt.pvalue)
-    ]
-    # If either of the statistical test was significant, plot the title
-    # in bold green
-    if ((stats_int_introt.pvalue <= 0.05)
-            or (stats_int_introt.pvalue <= 0.05)):
-        font_weight = 'bold'
-        font_color = 'xkcd:emerald'
-    else:
-        font_weight = 'normal'
-        font_color = 'black'
+    # Plot limits
+    n_items = len(data)
+    x_lim = [0.5, n_items + 0.5]
+    axh.plot(x_lim, [0, 0], 'k--')
+    axh.plot(x_lim, [1, 1], 'k--')
 
-    curr_ax.set_title(
-        '\n'.join(title_str),
-        fontdict={'fontweight': font_weight, 'color': font_color}
-    )
+    # Plot mean and standard deviation
+    x = 0
+    for l, d, c in zip(labels, data, col):
+        x += 1
+        y_mean = d.mean()
+        y_std = d.std()
+        axh.errorbar(x, y_mean, yerr=y_std, color=c, capsize=5)
+        axh.plot(x, y_mean, marker='o', color=c)
 
-"""
+    axh.set_xticks(range(1, n_items+1))
+    axh.set_xlim(x_lim)
+    axh.set_xticklabels(labels)
+
+    return None
