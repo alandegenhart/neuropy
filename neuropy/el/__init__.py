@@ -9,3 +9,4 @@ import neuropy.el.validation
 import neuropy.el.proc
 import neuropy.el.util
 import neuropy.el.plot
+import neuropy.el.comp
