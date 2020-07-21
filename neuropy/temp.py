@@ -85,8 +85,8 @@ def define_color_map():
 
 
 def plot_traj(traj, cond, col_map,
-              onset=[],
-              offset=[],
+              onset=None,
+              offset=None,
               axh=[],
               col_mode='dark',
               line_width=1,
@@ -114,9 +114,9 @@ def plot_traj(traj, cond, col_map,
 
     # Set index flag. If the onset and offset indices were passed as arguments,
     # then use these values to truncate the trajectories when plotting.
-    if onset == [] and offset == []:
+    if onset is None and offset is None:
         truncate_flag = False
-    elif onset != [] and offset != []:
+    elif onset is not None and offset is not None:
         truncate_flag = True
     else:
         msg = 'Both onset and offset arguments must be specified or empty.'
@@ -127,7 +127,7 @@ def plot_traj(traj, cond, col_map,
         temp_traj = traj.iloc[i]
         # Truncate trajectory if necessary
         if truncate_flag:
-            idx = range(onset_idx.iloc[i], offset_idx.iloc[i] + 1)
+            idx = range(onset.iloc[i], offset.iloc[i] + 1)
             temp_traj = temp_traj[:, idx]
 
         # Plot
@@ -180,8 +180,7 @@ def plot_single_traj(traj, cond, color_map,
     return None
 
 
-def spatial_average(
-        traj, max_iter=50):
+def spatial_average(traj, max_iter=50):
     """Average trajectories spatially.
     """
 
@@ -502,8 +501,8 @@ def remove_non_paired_trials(df):
 
     """
     # Define target combinations
-    start_pos = np.concatenate(df['startPos'])
-    end_pos = np.concatenate(df['targPos'])
+    start_pos = np.concatenate(df['startPos'].to_numpy())
+    end_pos = np.concatenate(df['targPos'].to_numpy())
     targ_comb = np.concatenate([start_pos, end_pos], axis=1)
     uni_targ_comb = np.unique(targ_comb, axis=0)
 
