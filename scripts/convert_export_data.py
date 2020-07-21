@@ -37,6 +37,7 @@ def main():
     )
     parser.add_argument('--pool_size', default=4, type=int)
     parser.add_argument('--limit', default=0, type=int)
+    parser.add_argument('--criteria', default='two_target_int_rot', type=str)
     args = parser.parse_args()
 
     # Print arguments
@@ -49,7 +50,7 @@ def main():
     EL = neu.el.util.ExperimentLog()
     EL.load()
     EL.get_data_path(args.location)
-    criteria = neu.el.util.get_valid_criteria()
+    criteria = neu.el.util.get_valid_criteria(args.criteria)
     EL.apply_criteria(criteria)
 
     # Iterate over datasets
