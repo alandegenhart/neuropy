@@ -14,19 +14,40 @@ src_dir = os.path.join(home_dir, 'src')
 # - get colors
 
 
-def get_valid_criteria():
+def get_valid_criteria(criteria_set):
     """Return criteria defining valid datasets."""
-    # TODO: perhaps this should be analysis-specific?
-    criteria = {
-        'subject': 'Earl',
-        'grid': 'targ_4',
-        'int_calib_method': 'center_out_udp',
-        'bins': 7,
-        'align_bins': 1,
-        'align': 'start',
-        'gpfa_int': 'grad_train',
-        'gpfa_rot': 'cond_4'
-    }
+    if criteria_set == 'two_target_int_rot':
+        # Paired two-target intuitive/rotated.
+        criteria = {
+            'subject': 'Earl',
+            'grid': 'targ_4',
+            'int_calib_method': 'center_out_udp',
+            'bins': 7,
+            'align_bins': 1,
+            'align': 'start',
+            'gpfa_int': 'grad_train',
+            'gpfa_rot': 'cond_4'
+        }
+    elif criteria_set == 'two_target_int':
+        # Two-target intuitive.  There are some datasets where the 'gpfa_rot'
+        # field is set to 'na'.  These are all datasets at the end of Earl data
+        # collection where a rotated mapping was never defined.  These datasets
+        # Are useful for analyzing the high-d structure during intuitive mapping
+        # control to different target pairs.
+        criteria = {
+            'subject': 'Earl',
+            'grid': 'targ_4',
+            'int_calib_method': 'center_out_udp',
+            'bins': 7,
+            'align_bins': 1,
+            'align': 'start',
+            'gpfa_int': 'grad_train',
+            'gpfa_rot': 'na'
+        }
+    else:
+        # Throw exception
+        raise NameError('Invalid criteria set specified.')
+
     return criteria
 
 
