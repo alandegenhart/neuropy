@@ -90,7 +90,8 @@ def plot_traj(traj, cond, col_map,
               axh=[],
               col_mode='dark',
               line_width=1,
-              marker_size=7):
+              marker_size=7,
+              mode='2d'):
     """Plot trajectories
     
     Plot all trajectories for a set of trials.
@@ -136,7 +137,8 @@ def plot_traj(traj, cond, col_map,
                          axh=axh,
                          col_mode=col_mode,
                          line_width=line_width,
-                         marker_size=marker_size)
+                         marker_size=marker_size,
+                         mode=mode)
     
     return None
     
@@ -145,7 +147,8 @@ def plot_single_traj(traj, cond, color_map,
                      axh=[],
                      col_mode='dark',
                      line_width=1,
-                     marker_size=10):
+                     marker_size=10,
+                     mode='2d'):
     """Plot a single trajectory"""
 
     # If an axis handle is not provided, then use the current axis
@@ -153,29 +156,55 @@ def plot_single_traj(traj, cond, color_map,
         axh = plt.gca()
 
     # Plot trajectory
-    axh.plot(
-        traj[0, :], traj[1, :], 
-        color=color_map[cond][col_mode],
-        linewidth=line_width             
-    )
-    # Plot start point
-    axh.plot(
-        traj[0, 0], traj[1, 0],
-        color=color_map[cond][col_mode],
-        marker='.',
-        markersize=marker_size,
-        markeredgecolor=None,
-        markerfacecolor=color_map[cond][col_mode]
-    )
-    # Plot end point
-    axh.plot(
-        traj[0, -1], traj[1, -1],
-        color=color_map[cond][col_mode],
-        marker='o',
-        markersize=marker_size,
-        markeredgecolor='k',
-        markerfacecolor=color_map[cond][col_mode]
-    )
+    if mode == '2d':
+        axh.plot(
+            traj[0, :], traj[1, :],
+            color=color_map[cond][col_mode],
+            linewidth=line_width
+        )
+        # Plot start point
+        axh.plot(
+            traj[0, 0], traj[1, 0],
+            color=color_map[cond][col_mode],
+            marker='.',
+            markersize=marker_size,
+            markeredgecolor=None,
+            markerfacecolor=color_map[cond][col_mode]
+        )
+        # Plot end point
+        axh.plot(
+            traj[0, -1], traj[1, -1],
+            color=color_map[cond][col_mode],
+            marker='o',
+            markersize=marker_size,
+            markeredgecolor='k',
+            markerfacecolor=color_map[cond][col_mode]
+        )
+    elif mode == '3d':
+        axh.plot(
+            traj[0, :], traj[1, :], traj[2, :],
+            color=color_map[cond][col_mode],
+            linewidth=line_width
+        )
+        # Plot start point
+        axh.plot(
+            [traj[0, 0]], [traj[1, 0]],
+            zs=[traj[2, 0]],
+            color=color_map[cond][col_mode],
+            marker='.',
+            markersize=marker_size,
+            markeredgecolor=None,
+            markerfacecolor=color_map[cond][col_mode]
+        )
+        # Plot end point
+        axh.plot(
+            [traj[0, -1]], [traj[1, -1]], [traj[2, -1]],
+            color=color_map[cond][col_mode],
+            marker='o',
+            markersize=marker_size,
+            markeredgecolor='k',
+            markerfacecolor=color_map[cond][col_mode]
+        )
     
     return None
 
@@ -562,8 +591,8 @@ def compare_flow_fields(F1, F2, n_min=1):
 
 
 def subplot_fixed(n_rows, n_cols, ax_size,
-                  x_margin=[200, 200],
-                  y_margin=[200, 300],
+                  x_margin=(200, 200),
+                  y_margin=(200, 300),
                   ax_spacing=125):
     """Create figure with subplots of a fixed size.
 
