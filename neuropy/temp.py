@@ -63,23 +63,34 @@ def get_targ_pairs(start_cond, end_cond):
     return mask
 
 
-def define_color_map():
+def define_color_map(style='default'):
     """Define map from target condition to color.
     
     Returns a dict containing, where each element is a color for a particular
     target condition.
     """
-    
-    col_map = {
-        'T1T5': {'dark': '#cc2500', 'light': '#cc9a8f'},
-        'T5T1': {'dark': '#0080b3', 'light': '#8fbbcc'},
-        'T2T6': {'dark': '#06a600', 'light': '#91cc8f'},
-        'T6T2': {'dark': '#9b00d9', 'light': '#c698d9'},
-        'T3T7': {'dark': '#cc8800', 'light': '#ccb88f'},
-        'T7T3': {'dark': '#0044cc', 'light': '#8fa3cc'},
-        'T4T8': {'dark': '#77cc00', 'light': '#b3cc8f'},
-        'T8T4': {'dark': '#cc0066', 'light': '#cc8fad'}
-    }#cc8800
+    if style == 'default':
+        col_map = {
+            'T1T5': {'dark': '#cc2500', 'light': '#cc9a8f'},
+            'T5T1': {'dark': '#0080b3', 'light': '#8fbbcc'},
+            'T2T6': {'dark': '#06a600', 'light': '#91cc8f'},
+            'T6T2': {'dark': '#9b00d9', 'light': '#c698d9'},
+            'T3T7': {'dark': '#cc8800', 'light': '#ccb88f'},
+            'T7T3': {'dark': '#0044cc', 'light': '#8fa3cc'},
+            'T4T8': {'dark': '#77cc00', 'light': '#b3cc8f'},
+            'T8T4': {'dark': '#cc0066', 'light': '#cc8fad'}
+        }
+    elif style == 'circular':
+        col_map = {
+            'T1T5': {'dark': '#bf0000', 'light': '#bf6060'},
+            'T2T6': {'dark': '#bf8f00', 'light': '#bfa760'},
+            'T3T7': {'dark': '#60bf00', 'light': '#8fbf60'},
+            'T4T8': {'dark': '#00bf30', 'light': '#60bf78'},
+            'T5T1': {'dark': '#00bfbf', 'light': '#60bfbf'},
+            'T6T2': {'dark': '#0030bf', 'light': '#6078bf'},
+            'T7T3': {'dark': '#6000bf', 'light': '#8f60bf'},
+            'T8T4': {'dark': '#bf008f', 'light': '#bf60a7'}
+        }
     
     return col_map
 
@@ -640,6 +651,31 @@ def subplot_fixed(n_rows, n_cols, ax_size,
         axh.append(rh)
 
     return fh, axh
+
+
+def create_3d_axes():
+    """Create 3d axis in new figure."""
+    from mpl_toolkits.mplot3d import Axes3D  # Needed for 3D plots
+
+    # Define figure size in pixels
+    ax_size = np.array([500, 500])  # Axis size (pixels)
+    x_margin = np.array([100, 100])
+    y_margin = np.array([100, 150])
+    fw = ax_size[0] + x_margin.sum()
+    fh = ax_size[1] + y_margin.sum()
+    fig_size = np.array([fw, fh])  # Figure size (pixels)
+    fig_size_in = fig_size / mpl.rcParams['figure.dpi']
+    fig_hndl = mpl.figure.Figure(figsize=fig_size_in)
+
+    # Define axis position and create
+    ax_size_norm = ax_size / fig_size
+    x_margin_norm = x_margin / fw
+    y_margin_norm = y_margin / fh
+    ax_rect = [x_margin_norm[0], y_margin_norm[0],
+               ax_size_norm[0], ax_size_norm[1]]
+    ax_hndl = fig_hndl.add_axes(ax_rect, projection='3d')
+
+    return fig_hndl, ax_hndl
 
 
 def plot_fig_4_proj_summary(results):
