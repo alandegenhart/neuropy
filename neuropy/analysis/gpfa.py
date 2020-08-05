@@ -67,6 +67,8 @@ def orthogonalize(C):
         # unit vector
         T = np.sqrt(C.T @ C)
         C_orth = C / T
+        s = []  # Not currently defined
+        VH = []  # Not currently defined
     else:
         # Perform SVD. Note that in standard notation, X = USV', so here the
         # matrix VH := V' (technically the complex transpose).
