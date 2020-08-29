@@ -1,4 +1,36 @@
-"""Convert MATLAB export data to pandas format."""
+"""Convert MATLAB export data to pandas format.
+
+This script
+
+Usage:
+python convert_export_data.py --location 'yu' --dry_run --use_multiproc
+    --pool_size 4 --limit 5 --criteria 'two_target_int_rot'
+
+Arguments:
+    --location
+        Specifies the data location.  This should always be 'yu'.
+    --dry_run
+        Specifies whether the script should be run in 'dry-run' mode.  In this
+        mode the entire script will be run, but any actual actions (e.g., data
+        saving/processing) will be skipped.  This is helpful to ensure the
+        code will run appropriately before starting a process that will take a
+        lot of time to execute.
+    --use_multiproc
+        Specifies whether multiprocessing should be used.  This can greatly
+        speed up processing time.
+    --pool_size
+        Number of parallel workers to use.  Only valid if the 'use_multiproc'
+        flag is provided.  The number of workers to use is generally limited
+        by the number of available cores on the system.
+    --limit
+        Maximum number of files to convert.  This is useful to make sure things
+        are working appropriately.
+    --criteria
+        Experimental criteria.  This specifies which types of experimental
+        criteria to use -- only the data files for these datasets will be
+        translated.  See neuropy.el.util.get_valid_criteria() for more info.
+
+"""
 
 # Import standard modules
 import os
