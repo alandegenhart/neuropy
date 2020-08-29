@@ -48,8 +48,46 @@ def get_targ_cond(pos):
     return cond
 
 
+def define_targ_pair_map():
+    """Define mapping from targets to target pairs."""
+
+    cond_to_pair = {
+        'T1T5': 1,
+        'T5T1': 1,
+        'T2T6': 2,
+        'T6T2': 2,
+        'T3T7': 3,
+        'T7T3': 3,
+        'T4T8': 4,
+        'T8T4': 4
+    }
+
+    pair_to_cond = {
+        1: 'T1T5',
+        2: 'T2T6',
+        3: 'T3T7',
+        4: 'T4T8'
+    }
+
+    return cond_to_pair, pair_to_cond
+
+
 def get_targ_pairs(start_cond, end_cond):
-    """Return boolean mask for paired target conditions."""
+    """Return boolean mask for paired target conditions.
+
+    This function returns a mask indicating which start/end target conditions
+    in the provided lists come from a paired set.  For example, the entry for a
+    a target condition 'T1 -> T5' will have a corresponding value of True if
+    'T5 -> T1' also exists in the data.
+
+    Inputs:
+    start_cond - List of strings indicating starting conditions
+    end_cond - List of strings indicating ending conditions
+
+    Returns:
+    mask - List of boolean indicating whether each of the input elements is
+            part of a pair
+    """
     
     # Define target pair and flipped target pair conditions
     cond = [''.join([s, e]) for s, e in zip(start_cond, end_cond)]
