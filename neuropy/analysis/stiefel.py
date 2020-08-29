@@ -2,6 +2,7 @@
 
 import numpy as np
 from scipy import linalg as linalg
+import neuropy.temp as tmp
 
 
 def optimize(ObjFn):
@@ -16,7 +17,7 @@ def optimize(ObjFn):
 
     # Get size of space -- it would be good to get these from the obj. fn.
     x_dim = ObjFn.x_dim  # Size of the data (high-d)
-    m_dim = ObjFn.d_dim  # Size of the desired orthonormal space
+    m_dim = ObjFn.m_dim  # Size of the desired orthonormal space
 
     # Initialize results
     S = []  # List to store results for each random restart
@@ -46,8 +47,8 @@ def optimize(ObjFn):
                 b = b * delta_b
 
                 # Evaluate step
-                fM = ObjFn.evaluate(M)
-                fR = ObjFn.evaluate(retract(b*Z, M))
+                fM, _ = ObjFn.evaluate(M)
+                fR, _ = ObjFn.evaluate(retract(b*Z, M))
                 df_iter = fM - fR
                 df.append(df_iter)
 
@@ -63,6 +64,7 @@ def optimize(ObjFn):
             J.append(J_iter)
             J_terms.append(J_terms_iter)
             dJ = J_iter - J_iter_prev
+            J_iter_prev = J_iter
 
             # Print convergence status
             if grad_iter % 10 == 0:
@@ -77,8 +79,7 @@ def optimize(ObjFn):
         S.append({
             'M': M,
             'J': J,
-            'J_terms': J_terms,
-            'dJ': dJ,
+            'J_terms': np.concatenate(J_terms),
             'J_final': J[-1],
             'converged': converged_flag,
             'n_iter': grad_iter
@@ -95,15 +96,27 @@ def optimize(ObjFn):
 def search_dir(Z, M):
     """Compute Stiefel optimization search direction."""
     x_dim = M.shape[0]
-    SK = (1/2) @ (M.T @ Z - Z.T @ M)
+    SK = (1/2) * (M.T @ Z - Z.T @ M)
     Z = M @ SK + (np.eye(x_dim) - M @ M.T) @ Z
     return Z
 
 
 def retract(Z, M):
-    """Retract onto Stiefel manifold."""
-    d_dim = M.shape[1]
-    Z = (M + Z) @ (np.eye(d_dim) + Z.T @ Z)**(-1/2)
+    """Retract onto Stiefel manifold.
+
+    See section A.3 of Cunningham and Ghahramani, 2015
+    """
+
+    # Note that this requires computing the inverse of the square root of a
+    # matrix (X^(-1/2)), which is defined as the solution to XX = B.
+    S = np.eye(M.shape[1]) + Z.T @ Z
+    d, Q = np.linalg.eig(S)
+    D = np.diag(d**(-1/2))
+    S_root_inv = Q @ D @ Q.T  # S^(-1/2)
+
+    # Calculate final retraction
+    Z = (M + Z) @ S_root_inv
+
     return Z
 
 
@@ -115,7 +128,7 @@ class ObjFn:
     neural activity.
     """
 
-    def __init__(self, params, data):
+    def __init__(self, data, params=None):
         """Initialization function."""
         self.params = params
         self.data = data
@@ -153,17 +166,31 @@ class AsymmetryStandard(ObjFn):
     objective function.
     """
 
-    def __init__(self, params, data):
+    def __init__(self, data, params=None):
         """Initialization function."""
 
+        # Set default parameters
+        if params is None:
+            params = {
+                'w_mid': 1,
+                'w_var': 1,
+                'w_start': 1
+            }
+
         # Call super method -- this adds the params and data to the object
-        super().__init__(params, data)
+        super().__init__(data, params)
 
         # TODO: check parameters structure here
 
+        self.term_str = [
+            'midpoint distance',
+            'midpoint variance',
+            'start distance'
+        ]
+
         # Get size of data
-        self.x_dim = self.data['mu_A'].shape[0]
-        self.m_dim = None  # Currently not needed
+        self.x_dim = self.data['mu_start'][0].shape[0]
+        self.m_dim = 2  # Hard-coded based on obj. fn.
 
     def evaluate(self, M):
         """Evaluate objective function."""
@@ -174,12 +201,12 @@ class AsymmetryStandard(ObjFn):
         w_start = self.params['w_start']
 
         # Unpack data
-        mu_A = self.data['mu_A']
-        mu_B = self.data['mu_B']
-        mu_AB = self.data['mu_AB']
-        mu_BA = self.data['mu_BA']
-        sig_AB = self.data['sig_AB']
-        sig_BA = self.data['sig_BA']
+        mu_A = self.data['mu_start'][0]
+        mu_B = self.data['mu_start'][1]
+        mu_AB = self.data['mu_center'][0]
+        mu_BA = self.data['mu_center'][1]
+        sig_AB = self.data['cov_center'][0]
+        sig_BA = self.data['cov_center'][1]
 
         # Unpack orthonormal projection
         p_1 = M[:, [0]]
@@ -201,7 +228,8 @@ class AsymmetryStandard(ObjFn):
 
         # Compute overall objective -- this is negative b/c we want to minimize
         J = - (term_1 + term_2 + term_3)
-        J_terms = [-term_1, -term_2, -term_3]
+        J = J[0, 0]  # Convert from np array to a scalar
+        J_terms = np.concatenate([-term_1, -term_2, -term_3], axis=1)
 
         return J, J_terms
 
@@ -214,12 +242,12 @@ class AsymmetryStandard(ObjFn):
         w_start = self.params['w_start']
 
         # Unpack data
-        mu_A = self.data['mu_A']
-        mu_B = self.data['mu_B']
-        mu_AB = self.data['mu_AB']
-        mu_BA = self.data['mu_BA']
-        sig_AB = self.data['sig_AB']
-        sig_BA = self.data['sig_BA']
+        mu_A = self.data['mu_start'][0]
+        mu_B = self.data['mu_start'][1]
+        mu_AB = self.data['mu_center'][0]
+        mu_BA = self.data['mu_center'][1]
+        sig_AB = self.data['cov_center'][0]
+        sig_BA = self.data['cov_center'][1]
 
         # Unpack orthonormal projection
         p_1 = M[:, [0]]
@@ -241,23 +269,173 @@ class AsymmetryStandard(ObjFn):
 class AsymmetrySquared(AsymmetryStandard):
     """Distance-squared version of standard asymmetry objective function."""
 
-    def __init__(self, params, data):
+    def __init__(self, data, params=None):
         """Initialization function."""
+
+        # Set default parameters
+        if params is None:
+            params = {
+                'w_mid': 1,
+                'w_var': 1,
+                'w_start': 1
+            }
 
         # Call super method -- this adds the params and data to the object.
         # Additionally, since the data terms used are the same, the size of the
         # data will be set appropriately in the init method of the super class.
-        super().__init__(params, data)
+        super().__init__(data, params)
+
+        self.term_str = [
+            'midpoint squared-distance',
+            'midpoint variance',
+            'start squared-distance'
+        ]
 
     def evaluate(self, M):
         """Evaluate objective function."""
-        # TODO: implement this
-        J = 0
-        J_terms = [0]
+
+        # Unpack parameters (for clarity)
+        w_mid = self.params['w_mid']
+        w_var = self.params['w_var']
+        w_start = self.params['w_start']
+
+        # Unpack data
+        mu_A = self.data['mu_start'][0]
+        mu_B = self.data['mu_start'][1]
+        mu_AB = self.data['mu_center'][0]
+        mu_BA = self.data['mu_center'][1]
+        sig_AB = self.data['cov_center'][0]
+        sig_BA = self.data['cov_center'][1]
+
+        # Unpack orthonormal projection
+        p_1 = M[:, [0]]
+        p_2 = M[:, [1]]
+
+        # --- Compute objective function ---
+        term_1 = w_mid * (p_1.T @ (mu_AB - mu_BA))**2
+        term_2 = -w_var * p_1.T @ (sig_AB + sig_BA) @ p_1
+        term_3 = w_start * (p_2.T @ (mu_A - mu_B))**2
+
+        J = -(term_1 + term_2 + term_3)
+        J = J[0, 0]  # Convert from np array
+        J_terms = [-term_1, -term_2, -term_3]
+
         return J, J_terms
 
     def gradient(self, M):
         """Calculate gradient."""
-        # TODO: implement this
-        dJ = None
+
+        # Unpack parameters (for clarity)
+        w_mid = self.params['w_mid']
+        w_var = self.params['w_var']
+        w_start = self.params['w_start']
+
+        # Unpack data
+        mu_A = self.data['mu_start'][0]
+        mu_B = self.data['mu_start'][1]
+        mu_AB = self.data['mu_center'][0]
+        mu_BA = self.data['mu_center'][1]
+        sig_AB = self.data['cov_center'][0]
+        sig_BA = self.data['cov_center'][1]
+
+        # Unpack orthonormal projection
+        p_1 = M[:, [0]]
+        p_2 = M[:, [1]]
+
+        # --- Compute gradient ---
+        term_1 = w_mid * (p_1.T @ (mu_AB - mu_BA) @ (mu_AB - mu_BA).T).T
+        term_2 = -w_var * 2 * (sig_AB + sig_BA) @ p_1
+        term_3 = w_start * (p_2.T @ (mu_A - mu_B) @ (mu_A - mu_B).T).T
+
+        d_p_1 = -(term_1 + term_2)
+        d_p_2 = -term_3
+        dJ = np.concatenate([d_p_1, d_p_2], axis=1)
+
         return dJ
+
+
+def plot(S, O):
+    """Plot objective function.
+
+    Inputs:
+    S - Objective function minimization results
+    O - Objective function object
+
+    Returns:
+    fh - Figure handle
+
+    """
+
+    # Setup plot -- plot overall objective function on one panel, and the
+    # individual terms on the other.
+    fh, axh = tmp.subplot_fixed(
+        1, 3, [300, 300],
+        x_margin=[150, 150],
+        y_margin=[150, 200]
+    )
+
+    # --- Subplot 1: Plot projection and data ---
+    curr_ax = axh[0][0]
+
+    # Project data into the 2D space
+    M = S['M']
+    mu_start = [M.T @ u for u in O.data['mu_start']]
+    mu_end = [M.T @ u for u in O.data['mu_end']]
+    mu_center = [M.T @ u for u in O.data['mu_center']]
+    targ_cond = O.data['uni_cond']
+
+    # Get color map
+    col_map = tmp.define_color_map()
+
+    # Plot all center points
+    x_center = M.T @ O.data['x_center']  # 2 x # pts
+    center_col = [col_map[c]['light'] for c in O.data['cond']]
+    curr_ax.scatter(x_center[0, :], x_center[1, :], s=5, c=center_col)
+
+    # Plot mean points (start, end, center)
+    for cond_idx, tc in enumerate(targ_cond):
+        # Get color from mapping
+        targ_col_dark = col_map[tc]['dark']
+        curr_ax.plot(
+            mu_start[cond_idx][0, :], mu_start[cond_idx][1, :],
+            color=targ_col_dark,
+            marker='o',
+            markersize=10
+        )
+        curr_ax.plot(
+            mu_end[cond_idx][0, :], mu_end[cond_idx][1, :],
+            color=targ_col_dark,
+            marker='x',
+            markersize=10
+        )
+        curr_ax.plot(
+            mu_center[cond_idx][0, :], mu_center[cond_idx][1, :],
+            color=targ_col_dark,
+            marker='.',
+            markersize=10
+        )
+
+    curr_ax.set_xlabel('Asymmetry axis')
+    curr_ax.set_ylabel('Target axis')
+    curr_ax.set_title('Projection data')
+    curr_ax.set_aspect('equal')
+
+    # --- Subplot 2: Plot overall objective function ---
+    curr_ax = axh[0][1]
+    curr_ax.plot(S['J'])
+    curr_ax.set_xlabel('Iterations')
+    curr_ax.set_ylabel('Obj. Fn. Value')
+    curr_ax.set_title('Objective function value')
+
+    # --- Subplot 3: Plot individual terms in objective ---
+    curr_ax = axh[0][2]
+    n_terms = S['J_terms'].shape[1]  # Number of columns
+    for t in range(n_terms):
+        curr_ax.plot(S['J_terms'][:, t], label=O.term_str[t])
+
+    curr_ax.set_xlabel('Iterations')
+    curr_ax.set_ylabel('Obj. Fn. Value')
+    curr_ax.set_title('Objective function value (terms)')
+    curr_ax.legend()
+
+    return fh
