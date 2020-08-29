@@ -1,4 +1,20 @@
-"""Organize Energy Landscape data files."""
+"""Organize Energy Landscape data files.
+
+This script will remove unused data formats from the data directory.  It is
+intended to be used prior to converting translated *.mat data into HDF5 formats
+in MATLAB.
+
+Usage:
+python clean_server_data.py --location 'yu' --dry_run
+
+Arguments:
+    --location   Specifies the data environment.  This should be 'yu'.
+    --dry_run    (optional) Runs through the full script without doing anything.
+                 useful to make sure that everything is set up properly before
+                 executing any processes that will take a long time to finish.
+
+Author: Alan Degenhart
+"""
 
 import os
 import sys
