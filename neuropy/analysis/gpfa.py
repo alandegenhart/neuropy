@@ -58,6 +58,9 @@ def orthogonalize(C):
     Returns:
     C_orth : array
     T : array
+
+    Orthonormalized latents can be obtained by computing T @ X, where X is the
+    non-orthonormalized latent state (xDim x samples).
     
     Adapted from orthogonalize.m by Byron Yu
     """
