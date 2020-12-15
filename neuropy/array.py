@@ -1,4 +1,4 @@
-"""Array operations module."""
+"""Array and matrix operations module."""
 
 
 import numpy as np
@@ -34,3 +34,17 @@ def ismember_rows(a, b):
         c = np.any(c)
     
     return c
+
+
+def logdet(A):
+    """Computes log(det(A)) where A is positive-definite
+
+    This is faster and more stable than computing log(det(A)) directly.
+
+    Adapted from logdet.m by Tom Minka
+    """
+    from scipy.linalg import cholesky
+
+    U = cholesky(A)
+    y = 2 * np.sum(np.log(np.diag(U)))
+    return y
