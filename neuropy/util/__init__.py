@@ -4,4 +4,4 @@ This package contains various utilities modules.
 """
 
 # Import modules
-import neuropy.util.convertmat
+#import neuropy.util.convertmat
