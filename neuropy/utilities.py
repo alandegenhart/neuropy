@@ -17,12 +17,18 @@ def load_boc():
     return boc
 
 
-def load_config() -> dict:
+def load_config(loc=None) -> dict:
     """Load package configuration file."""
     import json
 
     # Get path to config file
-    config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+    if loc is None:
+        # If location is not specified, load from the neuropy directory (where
+        # this function is location
+        # TODO: consider moving config file to a different location
+        loc = os.path.dirname(__file__)
+
+    config_path = os.path.join(loc, 'config.json')
 
     # Load criteria
     with open(config_path, 'rb') as f:
