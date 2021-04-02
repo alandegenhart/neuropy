@@ -5,6 +5,58 @@ import matplotlib
 from matplotlib import cm
 
 
+def subplot_fixed(n_rows, n_cols, ax_size,
+                  x_margin=(200, 200),
+                  y_margin=(200, 300),
+                  ax_spacing=125):
+    """Create figure with subplots of a fixed size.
+
+    """
+    # Convert lists to arrays. This makes working with them easier.
+    ax_size = np.array(ax_size)
+    x_margin = np.array(x_margin)
+    y_margin = np.array(y_margin)
+
+    # Determine figure width and height (in pixels)
+    fw = ax_size[0] * n_cols + ax_spacing * (n_cols - 1) + x_margin.sum()
+    fh = ax_size[1] * n_rows + ax_spacing * (n_rows - 1) + y_margin.sum()
+    fig_size = np.array([fw, fh])
+
+    # Convert all sizes from pixels to normalized units
+    ax_size_norm = ax_size / fig_size
+    x_margin_norm = x_margin / fw
+    y_margin_norm = y_margin / fh
+    ax_spacing_norm = ax_spacing / fig_size
+
+    # Create figure
+    fig_size_in = fig_size / matplotlib.rcParams['figure.dpi']
+    fh = matplotlib.figure.Figure(figsize=fig_size_in)
+
+    # Define positions of subplots
+    x_pos = np.arange(n_cols) * (ax_size_norm[0] + ax_spacing_norm[0])
+    x_pos += x_margin_norm[0]
+    y_pos = np.arange(n_rows) * (ax_size_norm[1] + ax_spacing_norm[1])
+    y_pos += y_margin_norm[0]
+    y_pos = y_pos[::-1]  # Flip to use standard row/column ordering
+
+    # Iterate over rows and columns to create axes
+    axh = []
+    for r in range(n_rows):
+        rh = []  # List of axes for the current row
+        for c in range(n_cols):
+            # Add axis
+            rect = [x_pos[c], y_pos[r], ax_size_norm[0], ax_size_norm[1]]
+            rh.append(fh.add_axes(rect))
+
+            # Format axis -- remove top and right spines
+            rh[c].spines['top'].set_visible(False)
+            rh[c].spines['right'].set_visible(False)
+
+        axh.append(rh)
+
+    return fh, axh
+
+
 def get_2D_color(pos, center=(0, 0), max_radius=1):
     """Get color for 2D position based on polar coordinate system."""
     import colorsys
