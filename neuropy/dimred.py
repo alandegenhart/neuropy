@@ -6,7 +6,7 @@ utilities for working matrix spaces (e.g., orthogonalization, subspace overlap)
 """
 # Import
 import numpy as np
-import aibs.mathutil as aimath
+import neuropy.mathutil
 import scipy.linalg as splinalg
 
 
@@ -64,7 +64,7 @@ class FactorAnalysis:
         # Initialize parameters
         cX = np.cov(X, bias=True)
         if np.linalg.matrix_rank(cX) == x_dim:
-            scale = np.exp(aimath.logdet(cX) / x_dim)
+            scale = np.exp(neuropy.mathutil.logdet(cX) / x_dim)
         else:
             # cX is not full rank
             print('Warning: data matrix is not full rank.')
@@ -213,7 +213,7 @@ class FactorAnalysis:
     @staticmethod
     def calc_ll(N, const, MM, S, normalized=True):
         """Helper function to perform LL calculation."""
-        term_1 = N * const + 0.5 * N * aimath.logdet(MM)
+        term_1 = N * const + 0.5 * N * neuropy.mathutil.logdet(MM)
         term_2 = 0.5 * np.sum(MM * S)
         if normalized:
             term_2 = term_2 * N
