@@ -15,10 +15,10 @@ import matplotlib
 from matplotlib import cm
 
 # Import - custom modules
-import neuropy as neu
-import aibs.movie as movie
-import aibs.dev as aibs
-import aibs.plot as aiplot
+import neuropy
+import neuropy.movie
+import neuropy.dev
+import neuropy.plot
 
 # Get home directory
 home_dir = os.path.expanduser('~')
@@ -31,13 +31,13 @@ def process_movie_data(exp_data, exp_events, metadata, save_dir):
 
     # Plot single-trial responses
     fh = movie.plot_single_trial_movie_response(X)
-    aiplot.add_figure_title_info(fh, metadata)
+    neuropy.plot.add_figure_title_info(fh, metadata)
     fig_name = f"Exp_{metadata['ophys_experiment_id']}_MovieResponse_SingleTrial.pdf"
     fh.savefig(os.path.join(save_dir, fig_name))
 
     # Plot trial-averaged responses
     fh = movie.plot_trial_averaged_movie_response(np.mean(X, axis=2), frame_num)
-    aiplot.add_figure_title_info(fh, metadata)
+    neuropy.plot.add_figure_title_info(fh, metadata)
     fig_name = f"Exp_{metadata['ophys_experiment_id']}_MovieResponse_TrialAveraged.pdf"
     fh.savefig(os.path.join(save_dir, fig_name))
 
