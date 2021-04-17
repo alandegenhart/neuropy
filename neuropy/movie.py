@@ -18,8 +18,8 @@ from allensdk.core.brain_observatory_cache import BrainObservatoryCache
 
 # Import custom modules
 import neuropy as neu
-import aibs.dev as dev
-import aibs.utilities as util
+import neuropy.dev as dev
+import neuropy.utilities as util
 
 # Get home directory
 home_dir = os.path.expanduser('~')
