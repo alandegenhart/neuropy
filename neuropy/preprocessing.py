@@ -101,70 +101,27 @@ def process_drifting_gratings_data(exp_data, exp_events, metadata, save_dir):
 
 def cut_drifting_gratings_data(exp_data, exp_events, bin_size=1):
     """Cut neural responses during presentation of drifting gratings and
-    return a design matrix.
+    return stimulus table with cut and binned data for each presentation.
     """
-    import itertools
 
-    # Get all possible stimulus combinations (orientation x temporal freq)
-    stimulus_epochs = exp_data.get_stimulus_table('drifting_gratings')
-    orientation = np.sort(stimulus_epochs.orientation.unique())
-    orientation = orientation[np.isfinite(orientation)]
-    temporal_frequency = np.sort(stimulus_epochs.temporal_frequency.unique())
-    temporal_frequency = temporal_frequency[np.isfinite(temporal_frequency)]
-    n_orientation = orientation.shape[0]
-    n_temporal_frequency = temporal_frequency.shape[0]
-    n_stimuli = n_orientation * n_temporal_frequency
-    stimulus_combinations = itertools.product(orientation, temporal_frequency)
+    # Get stimulus epochs, rename orientation as direction, and convert
+    # orientation to direction
+    stimulus_table = exp_data.get_stimulus_table('drifting_gratings')
+    stimulus_table.drop(columns='blank_sweep', inplace=True)
+    stimulus_table.dropna(subset=['temporal_frequency', 'orientation'], inplace=True)
+    stimulus_table['direction'] = stimulus_table.orientation
+    stimulus_table.orientation = stimulus_table.orientation.map(lambda x: x - 180 if x >= 180.0 else x)
 
-    # Iterate over all possible stimulus combinations, average data for each
-    # presentation, and add to array.
-    stimulus_reps = []
-    avg_events = []
-    all_events = []
-    all_orientation = []
-    all_temporal_frequency = []
-    for o, tf in stimulus_combinations:
-        # Get valid epochs
-        o_mask = stimulus_epochs.orientation == o
-        tf_mask = stimulus_epochs.temporal_frequency == tf
-        epoch_mask = np.logical_and(o_mask, tf_mask)
-        valid_epochs = stimulus_epochs[epoch_mask]
-        stimulus_reps.append(valid_epochs.shape[0])  # Number of reps per stim combination
+    # Bin dff and events
+    _, dff = exp_data.get_dff_traces()
+    binned_dff = bin_by_stimulus_table(stimulus_table, dff, bin_size=bin_size)
+    binned_events = bin_by_stimulus_table(stimulus_table, exp_events, bin_size=bin_size)
 
-        # Iterate over epochs and get events
-        stimulus_events_avg = []
-        stimulus_events = []
-        for _, e in valid_epochs.iterrows():
-            epoch_events = exp_events[:, int(e.start):int(e.end)]
-            epoch_events = bin_data(epoch_events, bin_size=bin_size)
-            stimulus_events.append(epoch_events)
-            stimulus_events_avg.append(np.mean(epoch_events, axis=1))
+    # Add binned data to DataFrame
+    stimulus_table['dff'] = binned_dff
+    stimulus_table['events'] = binned_events
 
-        # Add repeats of the current stimulus set
-        avg_events.append(np.stack(stimulus_events_avg, axis=1))
-        all_events.append(stimulus_events)
-        all_orientation.append(o)
-        all_temporal_frequency.append(tf)
-
-    # Check the number of reps.  Need to do this just in case there is a
-    # different number of repetitions per stimulus
-    n_reps = np.max(stimulus_reps)
-
-    # Reshape data into design matrix of shape neurons x stimuli x reps
-    n_neurons = exp_events.shape[0]
-    X = np.full((n_neurons, n_stimuli, n_reps), np.nan)
-    for i, x in enumerate(avg_events):
-        X[:, i, 0:x.shape[1]] = x
-
-    # Collect stimulus info
-    stimulus_info = {
-        'events': all_events,
-        'orientation': all_orientation,
-        'temporal_frequency': all_temporal_frequency,
-        'reps': stimulus_reps
-    }
-
-    return X, stimulus_info
+    return stimulus_table
 
 
 def get_proc_function(stimulus):
@@ -177,6 +134,15 @@ def get_proc_function(stimulus):
     }
 
     return proc_func_dict[stimulus]
+
+
+def bin_by_stimulus_table(stimulus_table, X, bin_size=1):
+    """Bin data using stimulus start/stop indices."""
+    # Define wrapper around binning function
+    def bin_func(row, X, bin_size):
+        return neuropy.preprocessing.bin_data(X[:, row.start.astype(int):row.end.astype(int)], bin_size=bin_size)
+    # Bin dff and events
+    return stimulus_table.apply(bin_func, axis=1, args=(X, bin_size))
 
 
 def bin_data(X, bin_size=1, bin_func=np.sum, incomplete=False):
