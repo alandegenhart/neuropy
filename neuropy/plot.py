@@ -121,6 +121,13 @@ def add_figure_title_info(fh, md, additional_info=None):
     return None
 
 
+def figure_title_from_dict(fh, info):
+    """Create figure title from dictionary."""
+    figure_title_list = [f'{k}: {v}' for k, v in info.items()]
+    add_figure_text(fh, figure_title_list)
+    return
+
+
 def get_categorical_colors(category_list, color_map):
     """Create color info dict for categorical data.
 
