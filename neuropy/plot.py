@@ -3,6 +3,10 @@
 import numpy as np
 import matplotlib
 from matplotlib import cm
+import matplotlib.colors
+import sklearn.metrics
+
+import neuropy.scm
 
 
 def subplot_fixed(n_rows, n_cols, ax_size,
@@ -102,7 +106,7 @@ def add_figure_text(fh, info: list) -> None:
     return None
 
 
-def add_figure_title_info(fh, md, additional_info=None):
+def add_figure_metadata(fh, md, additional_info=None):
     """Add list of experimental info to the specified figure."""
 
     # Specify list of info to add
@@ -282,6 +286,31 @@ def get_metric_colors(metric_vals, colormap_name, circular=False):
     }
 
     return color_info
+
+
+def confusion_matrix(ax, labels_actual, labels_predicted, title=None):
+    """Plot confusion matrix for labelled data."""
+    # Generate confusion matrix and normalize
+    C = sklearn.metrics.confusion_matrix(labels_actual, labels_predicted)
+    norm = matplotlib.colors.Normalize(vmin=0, vmax=1)
+    c_norm = np.max(np.sum(C, 1))
+    C = C / c_norm
+
+    # Plot
+    im = ax.imshow(C, cmap=neuropy.scm.devon, norm=norm)
+    ax.set_ylabel('Actual class')
+    ax.set_xlabel('Predicted class')
+
+    # Set title
+    accuracy = np.sum(labels_actual == labels_predicted)/len(labels_actual)
+    accuracy_str = f'Accuracy: {accuracy:0.3f}'
+    if title is None:
+        title_str = accuracy_str
+    else:
+        title_str = title + '\n' + accuracy_str
+    ax.set_title(title_str)
+
+    return im
 
 
 if __name__ == '__main__':
