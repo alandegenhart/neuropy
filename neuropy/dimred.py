@@ -268,7 +268,7 @@ def orthogonalize(C):
     return C_orth, T, s, VH
 
 
-def percent_variance_captured(V_1, V_2):
+def percent_variance_captured(V_1, V_2, S=None):
     """Estimate percent shared variance of one space captured by another.
 
     Calculates the fraction of the total variance in V_1 that is captured by
@@ -279,8 +279,13 @@ def percent_variance_captured(V_1, V_2):
     # V: non-orthonormalized space
     # U: orthonormalized space
     U_2, _, _, _ = orthogonalize(V_2)
-    var_cap = np.trace((U_2 @ U_2.T) @ (V_1 @ V_1.T) @ (U_2 @ U_2.T))
-    total_var = np.trace(V_1 @ V_1.T)
+
+    # Calculate shared variance/covariance if not specified
+    if S is None:
+        S = V_1 @ V_1.T
+
+    var_cap = np.trace((U_2 @ U_2.T) @ S @ (U_2 @ U_2.T))
+    total_var = np.trace(S)
     p_cap = var_cap / total_var
 
     return p_cap
