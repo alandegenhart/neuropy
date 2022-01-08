@@ -2,7 +2,10 @@
 
 **Note:** this package is in active development and use and is likely to change dramatically without notice.
 
-This package contains a collection of Python code for the analysis of neural data. It was initially created while I was a postdoc at Carnegie Mellon University to aid in the analysis of intracortical recordings during brain-computer interface (BCI) tasks. Since moving to the Allen Institute for Brain Science (AIBS), I have continued to use and develop this code base, adding functionality for interacting with [Allen Institute Brain Observatory data](http://observatory.brain-map.org/visualcoding).
+This package contains a collection of Python code for the analysis of neural data. It was initially created while I was a postdoc at Carnegie Mellon University to aid in the analysis of intracortical recordings during brain-computer interface (BCI) tasks. After moving to the Allen Institute I continued to use and develop this code base, adding functionality for interacting with [Allen Institute Brain Observatory data](http://observatory.brain-map.org/visualcoding).
+
+## Installation
+I recommend installing this package in 'development' mode via pip.  After cloning the repository, navigate to the root directory of the package and run: `pip install -e .`.  I generally prefer using Anaconda for environment management, though this should also work with `venv`.
 
 **Highlights** (i.e., things that might be useful to others):
 - `analysis/stiefel.py` : code to perform optimization over the stiefel manifold.  Allows the user to create subclasses for new objective functions.
