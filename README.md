@@ -7,13 +7,14 @@ This package contains a collection of Python code for the analysis of neural dat
 ## Installation
 I recommend installing this package in 'development' mode via pip.  After cloning the repository, navigate to the root directory of the package and run: `pip install -e .`.  I generally prefer using Anaconda for environment management, though this should also work with `venv`.
 
-**Highlights** (i.e., things that might be useful to others):
+## Highlights (i.e., things that might be useful to others):
 - `analysis/stiefel.py` : code to perform optimization over the stiefel manifold.  Allows the user to create subclasses for new objective functions.
 - `dimred.py` : module for dimensionality-reduction analyses.  Contains a Python implementation of Factor Analysis based on Expectation Maximization (EM).
 - `pbstools.py` : module for running code on the AIBS cluster (PBS/Moab).
 
+## Brief description of all modules
+**Note:** this list is not currently up to date.
 
-**Brief description of all modules** (in alphabetical order):
 - `analysis` : general analysis sub-package
     - `gpfa.py` : module for processing GPFA (Gaussian Process Factor Analysis) data
     - `math.py` : currently a catch-all for math functions without a home.  Contains an implementation of Fisher's LDA. *[deprecated]*
