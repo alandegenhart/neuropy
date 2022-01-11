@@ -195,11 +195,20 @@ def categorical_color_map():
 def define_cre_line_colors_platform():
     """Define colors based on those in the platform paper."""
     col_rgb = {
-        'Vip-IRES-Cre': [180, 144, 56],
-        'Sst-IRES-Cre': [123, 83, 24],
-        'Slc17a7-IRES2-Cre': [137, 138, 140]
+        'Emx1-IRES-Cre': '#9F9F9F',
+        'Slc17a7-IRES2-Cre': '#5C5C5C',
+        'Cux2-CreERT2': '#A92E66',
+        'Rorb-IRES2-Cre': '#7841BE',
+        'Scnn1a-Tg3-Cre': '#4F63C2',
+        'Nr5a1-Cre': '#5BB0B0',
+        'Fezf2-CreER': '#3A6604',
+        'Tlx3-Cre_PL56': '#99B20D',
+        'Rbp4-Cre_KL100': '#5CAD53',
+        'Ntsr1-Cre_GN220': '#FF3B39',
+        'Sst-IRES-Cre': '#7B5217',
+        'Vip-IRES-Cre': '#B49139',
+        'Pvalb-IRES-Cre': '#E3812B',
     }
-    col_rgb = {k:np.array(v)/255 for k, v in col_rgb.items()}
     return col_rgb
 
 
@@ -215,7 +224,7 @@ def define_cre_line_colors():
         'Scnn1a-Tg3-Cre',
         'Nr5a1-Cre',
         'Rbp4-Cre_KL100',
-        'Fezf2-CreER',
+        'Pvalb-IRES-Cre',
         'Tlx3-Cre_PL56',
         'Ntsr1-Cre_GN220',
         'Sst-IRES-Cre',
